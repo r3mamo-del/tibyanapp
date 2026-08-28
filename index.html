@@ -858,6 +858,15 @@
     background: var(--accentSoft); padding: 4px 12px; border-radius: 20px;
   }
   table.report-table { width:100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  /* بالشاشات الضيقة (الآيفون) — 7 أعمدة بجدول عريض كانت تنضغط بشدة
+     وتتراكب فوق بعضها بدون أي تمرير أفقي أو تصغير، مؤكَّد كحالة واقعية
+     حقيقية. الحاوية الملفوفة حول الجدول (overflow-x:auto) تسمح بالتمرير
+     الأفقي، وهذا يقلّل الحشو والخط شوي عشان أكبر عدد أعمدة يبان بدون
+     تمرير قدر الإمكان. */
+  @media (max-width: 480px) {
+    table.report-table { font-size: 11.5px; min-width: 560px; }
+    table.report-table th, table.report-table td { padding: 7px 5px; }
+  }
   table.report-table thead th {
     background: var(--accentSoft); color: var(--accent); padding: 10px 12px; text-align: center;
     font-weight: 800; border-bottom: 2.5px solid var(--gold); border-top: 1px solid var(--border);
@@ -1055,6 +1064,14 @@
 
   @media print {
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    /* حماية إضافية ضد قيد معروف بمتصفح Safari iOS تحديدًا: العناصر ذات
+       position:sticky أحيانًا "تبقى ظاهرة" أثناء الطباعة رغم display:none
+       المطبَّق عليها بقواعد وضع الطباعة الخاصة أدناه (خصوصًا بعد تغيير
+       حجم الصفحة/التكبير قبل الطباعة مباشرة) — مؤكَّد كحالة واقعية
+       حقيقية (تُطبع الواجهة الرئيسية كاملة بدل التقرير المحدَّد). إخراج
+       الهيدر من sticky أثناء أي طباعة (بغض النظر عن أي وضع) يمنع هذا
+       السلوك من الأساس، بدل الاعتماد على display:none وحدها. */
+    header { position: static !important; }
     /* The loading overlay is briefly visible on-screen while a print
        function's own preparation runs (building the printable HTML)
        right before window.print() fires — confirmed as a real, reported
@@ -2829,6 +2846,7 @@
 
         <div class="report-bars" id="report-bars"></div>
 
+        <div style="overflow-x:auto; -webkit-overflow-scrolling:touch">
         <table class="report-table">
           <thead>
             <tr>
@@ -2843,6 +2861,7 @@
           </thead>
           <tbody id="report-table-body"></tbody>
         </table>
+        </div>
 
         <div class="report-legend">
           <div class="pct-red" data-i18n="pctLessThan85">أقل من 85%</div>
@@ -3263,7 +3282,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 7.2.0</span>
+  <span id="app-version">الإصدار 7.3.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
