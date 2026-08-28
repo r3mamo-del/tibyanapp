@@ -2951,6 +2951,46 @@
       </div>
 
       <div class="card collapsed">
+        <div class="section-title collapsible" onclick="toggleCard(this)" data-i18n="gwPwMasarTitle">🔑 كلمة مرور بوابة "مسار أورام الثدي والقولون"</div>
+        <div class="mb14">
+          <label class="lbl" for="gwCurPw-masar" data-i18n="curPwLabel">كلمة المرور الحالية</label>
+          <input type="password" id="gwCurPw-masar" placeholder="أدخل كلمة المرور الحالية..." data-i18n-placeholder="curPwPlaceholder" />
+        </div>
+        <div class="grid2">
+          <div>
+            <label class="lbl" for="gwNewPw-masar" data-i18n="newPwLabel">كلمة المرور الجديدة</label>
+            <input type="password" id="gwNewPw-masar" placeholder="8 أحرف على الأقل" data-i18n-placeholder="newPwPlaceholder8" />
+          </div>
+          <div>
+            <label class="lbl" for="gwConfirmPw-masar" data-i18n="confirmPwLabel">تأكيد كلمة المرور الجديدة</label>
+            <input type="password" id="gwConfirmPw-masar" placeholder="أعد كتابتها" data-i18n-placeholder="confirmPwPlaceholder" />
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="changeGatewayPassword('masar')" data-i18n="btnUpdatePassword">تحديث كلمة المرور</button>
+        <div id="gw-pw-change-status-masar" class="file-status"></div>
+      </div>
+
+      <div class="card collapsed">
+        <div class="section-title collapsible" onclick="toggleCard(this)" data-i18n="gwPwAfifTitle">🔑 كلمة مرور بوابة "عفيف"</div>
+        <div class="mb14">
+          <label class="lbl" for="gwCurPw-afif" data-i18n="curPwLabel">كلمة المرور الحالية</label>
+          <input type="password" id="gwCurPw-afif" placeholder="أدخل كلمة المرور الحالية..." data-i18n-placeholder="curPwPlaceholder" />
+        </div>
+        <div class="grid2">
+          <div>
+            <label class="lbl" for="gwNewPw-afif" data-i18n="newPwLabel">كلمة المرور الجديدة</label>
+            <input type="password" id="gwNewPw-afif" placeholder="8 أحرف على الأقل" data-i18n-placeholder="newPwPlaceholder8" />
+          </div>
+          <div>
+            <label class="lbl" for="gwConfirmPw-afif" data-i18n="confirmPwLabel">تأكيد كلمة المرور الجديدة</label>
+            <input type="password" id="gwConfirmPw-afif" placeholder="أعد كتابتها" data-i18n-placeholder="confirmPwPlaceholder" />
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="changeGatewayPassword('afif')" data-i18n="btnUpdatePassword">تحديث كلمة المرور</button>
+        <div id="gw-pw-change-status-afif" class="file-status"></div>
+      </div>
+
+      <div class="card collapsed">
         <div class="section-title collapsible" onclick="toggleCard(this)" data-i18n="myMeetingsTitle">🗓️ اجتماعاتي</div>
         <div class="admin-note" data-i18n="meetingsNote">
           ⚠ التنبيه (صوت + نافذة) يعمل طالما هذا التبويب مفتوح بالمتصفح. لو أغلقت المتصفح تمامًا أو دخل الجهاز بوضع السبات، التنبيه ما راح يطلع — هذا قيد تقني بكل تطبيقات الويب وليس خاص بهذه الصفحة. أول مرة تضيف تذكيرًا، وافق على إذن الإشعارات من المتصفح لأفضل تنبيه.
@@ -3223,7 +3263,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 6.1.0</span>
+  <span id="app-version">الإصدار 6.3.2</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -4352,6 +4392,10 @@ const I18N = {
     wrongCurrentPw: '⚠ كلمة المرور الحالية غير صحيحة',
     newPwTooShort: '⚠ كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل',
     pwMismatch: '⚠ كلمة المرور الجديدة وتأكيدها غير متطابقين',
+    pwChangedOk: '✅ تم تحديث كلمة المرور بنجاح',
+    gwPwMasarTitle: '🔑 كلمة مرور بوابة "مسار أورام الثدي والقولون"',
+    gwPwAfifTitle: '🔑 كلمة مرور بوابة "عفيف"',
+    newPwTooShort8: '8 أحرف على الأقل',
     pwUpdated: '✓ تم تحديث كلمة المرور بنجاح',
     errPickBothDates: "⚠ حدد تاريخي \"من\" و\"إلى\" أولاً",
     errEndBeforeStart: "⚠ تاريخ النهاية يجب ألا يسبق البداية",
@@ -7524,7 +7568,7 @@ let gatewayPendingChoice = null;
 let afifRestrictedMode = false;
 const RESTRICTED_HOSPITAL = 'عفيف';
 const GATEWAY_PW_KEYS = { afif: 'raqeeb_gatewayPw_afif_v1', masar: 'raqeeb_gatewayPw_masar_v1' };
-const GATEWAY_PW_DEFAULTS = { afif: 'afif2024', masar: 'masar2024' };
+const GATEWAY_PW_DEFAULTS = { afif: 'afif2024', masar: 'mamo2025' };
 function gatewaySelect(choice) {
   gatewayPendingChoice = choice;
   document.getElementById('gateway-choices').style.display = 'none';
@@ -7562,19 +7606,14 @@ async function gatewaySubmit() {
   afifRestrictedMode = (choice === 'afif');
   updateWelcomeBannerText();
   document.getElementById('gateway-screen').style.display = 'none';
-  if (afifRestrictedMode) {
-    // Afif's 5 features (search, audit Excel search, indicators,
-    // performance, positive/B0 cases) all live behind the normal admin
-    // login — the gateway password already served as that gate, so log
-    // straight in instead of asking a second time.
+  {
+    // كلا المسارين (عفيف ومسار) يدخلان مباشرة للوحة الإدارة بعد كلمة
+    // مرور البوابة الصحيحة — بدون طلب كلمة مرور المشرف مرة ثانية.
+    // كانت "مسار" تحديدًا تطلب دخول مزدوج (بوابة، ثم مشرف)، بعكس عفيف.
     adminAuth = true;
     document.getElementById('login-card').style.display   = 'none';
     document.getElementById('admin-content').style.display = 'block';
-    applyAfifRestrictions();
-    // doLogin() is what normally triggers this — Afif's flow logs straight
-    // into admin (see comment above) and skips doLogin() entirely, so
-    // nothing was ever prompting for Drive sign-in on this path.
-    promptDriveSignInOnStartup();
+    if (afifRestrictedMode) applyAfifRestrictions();
     const exitBtn = document.getElementById('gateway-exit-btn');
     if (exitBtn) exitBtn.style.display = '';
     // Not calling switchTab('admin') here — it reads window.event.currentTarget
@@ -7590,6 +7629,40 @@ async function gatewaySubmit() {
     refreshAdminUI();
     switchAdminPage('report');
   }
+}
+// تغيير كلمة مرور أي بوابة من داخل التطبيق (بصفحة الإعدادات) — نفس
+// منطق changePassword() الخاص بكلمة مرور المشرف، بس لكل بوابة على حدة.
+async function changeGatewayPassword(choice) {
+  const statusEl = document.getElementById(`gw-pw-change-status-${choice}`);
+  statusEl.style.display = 'block';
+  const cur = normalizePassword(document.getElementById(`gwCurPw-${choice}`).value);
+  const np  = document.getElementById(`gwNewPw-${choice}`).value;
+  const cp  = document.getElementById(`gwConfirmPw-${choice}`).value;
+
+  let saved;
+  try { saved = await storageGet(GATEWAY_PW_KEYS[choice]); } catch (e) { saved = null; }
+  const currentActual = normalizePassword(saved || GATEWAY_PW_DEFAULTS[choice]);
+  if (cur !== currentActual) {
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = t('wrongCurrentPw');
+    return;
+  }
+  if (!np || np.length < 8) {
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = t('newPwTooShort');
+    return;
+  }
+  if (np !== cp) {
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = t('pwMismatch');
+    return;
+  }
+  await storageSet(GATEWAY_PW_KEYS[choice], np);
+  document.getElementById(`gwCurPw-${choice}`).value = '';
+  document.getElementById(`gwNewPw-${choice}`).value = '';
+  document.getElementById(`gwConfirmPw-${choice}`).value = '';
+  statusEl.style.color = 'var(--success)';
+  statusEl.textContent = t('pwChangedOk');
 }
 // Locks the UI down to exactly the 5 things Afif was granted: single-ID
 // search + bulk Excel search (already public, untouched), indicators,
@@ -7691,7 +7764,6 @@ async function doLogin() {
     // actually became visible, only on an explicit module switch
     // afterward. Calling it explicitly here removes the need for that.
     updateHeaderModuleBadge();
-    promptDriveSignInOnStartup();
   } else {
     document.getElementById('pw-error').textContent = t('errWrongPassword');
   }
@@ -15819,24 +15891,10 @@ function updateLiveStatusBadge() {
     }
   }
 }
-// Set right before triggering sign-in from the startup prompt (see
-// promptDriveSignInOnStartup) — checked once sign-in actually succeeds so
-// that ONLY this flow auto-triggers "update now" + auto-refresh; signing
-// in later from the Settings page manually still behaves as before (just
-// signs in, nothing forced automatically).
+// Drive تقاعد كليًا لصالح GitHub — هذي الدالة كانت تعرض نافذة "تسجيل
+// الدخول لـ Google Drive؟" فور الدخول، رغم إن النظام كله يعتمد على
+// GitHub حاليًا. حُذفت بالكامل (كان مصدر النافذة المزعجة المتكررة).
 let pendingStartupDriveFlow = false;
-async function promptDriveSignInOnStartup() {
-  // Only worth asking if Drive is actually configured (Client ID + API
-  // Key already saved from a previous session) — no point prompting to
-  // sign in to something that isn't even set up yet.
-  if (!driveClientIdValue || !driveApiKeyValue) return;
-  if (driveAccessToken) return; // already signed in this session
-  if (location.protocol === 'file:') return; // Drive only works via localhost anyway
-  const wantsSignIn = await showConfirmModal(t('driveSignInPromptMsg'), t('driveSignInPromptTitle'));
-  if (!wantsSignIn) return;
-  pendingStartupDriveFlow = true;
-  initGoogleDriveAuth();
-}
 let drivePickerLoaded = false;
 
 // On-page event log — shows every step in plain readable text directly on
