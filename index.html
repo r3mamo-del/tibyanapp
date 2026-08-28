@@ -3282,7 +3282,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 7.3.0</span>
+  <span id="app-version">الإصدار 7.4.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -5348,10 +5348,21 @@ async function storageSet(key, value) {
     });
     if (!res.ok) console.error('storageSet: فشلت الكتابة أونلاين، الاعتماد على النسخة المحلية بس');
   } catch (e) { console.error('storageSet: تعذّر الاتصال بالطبقة الوسيطة', e); }
-  if (localStore) {
-    localStore.setItem('dupcheck:' + key, value);
-  } else {
-    memoryFallback['dupcheck:' + key] = value;
+  // النسخة الاحتياطية المحلية محاطة بحماية صريحة الآن — بعض القيم
+  // (زي ملفات القولون المجمَّعة الكبيرة) تتجاوز سعة تخزين المتصفح
+  // (localStorage، عادة 5-10 ميجابايت)، مؤكَّد كحالة واقعية حقيقية
+  // (QuotaExceededError). كانت تُلقى بدون أي try/catch، فتنهار الدالة
+  // كاملة رغم إن الكتابة الأونلاين (المصدر الأساسي فعليًا) نجحت.
+  try {
+    if (localStore) {
+      localStore.setItem('dupcheck:' + key, value);
+    } else {
+      memoryFallback['dupcheck:' + key] = value;
+    }
+  } catch (e) {
+    // فشل النسخة الاحتياطية المحلية بس — لا يوقف أي شي تاني، خصوصًا لو
+    // الكتابة الأونلاين نجحت أصلًا (الحالة الشائعة).
+    console.error('storageSet: فشلت النسخة الاحتياطية المحلية (على الأغلب تجاوز السعة)', e);
   }
 }
 
