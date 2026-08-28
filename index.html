@@ -3263,7 +3263,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 6.3.2</span>
+  <span id="app-version">الإصدار 6.3.3</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -5093,7 +5093,7 @@ async function restoreLanguage() {
 // ═══════════════════════════════════════════════════════
 // ⚠ TEMP: password gate disabled on the gateway (عفيف/المسار) and the admin
 // tab login for easier testing. Set back to false to restore normal login.
-const SKIP_LOGIN_PASSWORDS = true;
+const SKIP_LOGIN_PASSWORDS = false; // كان true بالغلط (متغيّر تجريبي) — يتجاوز كل كلمات المرور بالكامل، أي إدخال يدخل بدون تحقق فعلي
 const DEFAULT_ADMIN_PASSWORD = "admin2024";
 const PASSWORD_KEY = "duplicateSearchAdminPw_v1";
 let ADMIN_PASSWORD = DEFAULT_ADMIN_PASSWORD;
