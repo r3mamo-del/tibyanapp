@@ -3263,7 +3263,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 7.1.0</span>
+  <span id="app-version">الإصدار 7.2.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -12752,17 +12752,29 @@ async function mergeSharedPositiveLogFromDrive() {
     }
   } catch (e) { console.error('mergeSharedPositiveLogFromDrive failed', e); }
 }
+// دمج كتابات سجل الحالات الإيجابية — كانت تُستدعى عشرات المرات أثناء
+// مزامنة واحدة (مرة لكل مستشفى يكتشف حالة جديدة)، كل مرة تكتب نفس
+// المفتاحين من جديد. مؤكَّد كمساهم رئيسي بتجاوز حد Cloudflare KV
+// اليومي. آلية تأخير بسيطة (debounce): البيانات بالذاكرة تتحدّث فورًا
+// (الواجهة تبقى سريعة الاستجابة)، بس الكتابة الفعلية للتخزين المشترك
+// تتأخر ثانيتين — لو استُدعيت الدالة مرة ثانية خلال هالمدة، المؤقّت
+// يُعاد من الصفر، فسلسلة استدعاءات متلاحقة (زي أثناء مزامنة كاملة)
+// تنتج كتابة فعلية واحدة بس بالنهاية.
+let _savePositiveLogDebounceTimer = null;
 async function savePositiveLog() {
-  try { await storageSet('raqeeb_positiveLog_v1', JSON.stringify(positiveLog)); } catch (e) {}
-  try { await storageSet('raqeeb_positiveSeen_v1', JSON.stringify(positiveSeenIds)); } catch (e) {}
-  // Pushes to the shared Drive file too — fire-and-forget (never blocks
-  // the UI on a network round-trip) but failures are still logged, not
-  // silently swallowed, since a repeatedly-failing push IS the exact
-  // "devices silently diverging" problem this whole mechanism exists to
-  // prevent.
-  if (driveAccessToken) {
-    writeSharedPositiveLogMerged().catch(e => console.error('shared state push failed', e));
-  }
+  clearTimeout(_savePositiveLogDebounceTimer);
+  _savePositiveLogDebounceTimer = setTimeout(async () => {
+    try { await storageSet('raqeeb_positiveLog_v1', JSON.stringify(positiveLog)); } catch (e) {}
+    try { await storageSet('raqeeb_positiveSeen_v1', JSON.stringify(positiveSeenIds)); } catch (e) {}
+    // Pushes to the shared Drive file too — fire-and-forget (never blocks
+    // the UI on a network round-trip) but failures are still logged, not
+    // silently swallowed, since a repeatedly-failing push IS the exact
+    // "devices silently diverging" problem this whole mechanism exists to
+    // prevent.
+    if (driveAccessToken) {
+      writeSharedPositiveLogMerged().catch(e => console.error('shared state push failed', e));
+    }
+  }, 2000);
   // Live-refresh the unified indicators page on ANY positive-case data
   // change (new case detected, reference sync, repair, etc.) — but only if
   // it's actually the page currently open, to avoid pointless work.
@@ -16817,6 +16829,11 @@ async function refreshAllFromGitHub(isManual) {
     }
   }
   currentModule = originalModule;
+  // يكتب كل بيانات ملفات المستشفيات المجمَّعة بالذاكرة دفعة واحدة (مفتاحين
+  // إجمالًا) — بدل عشرات الكتابات المنفصلة يلي كانت تصير أثناء الحلقة
+  // أعلى (كل مستشفى على حدة)، وهذا بالضبط سبب تجاوز حد Cloudflare KV
+  // اليومي (1000 عملية/يوم) بسرعة.
+  await flushFileCacheBatch();
   await saveDriveLastUpdate(currentModule);
 
   const summary = `✅ تمّت مزامنة ${okCount} ملف من GitHub` + (failCount > 0 ? ` — فشل ${failCount}: ${failedHospitals.join('، ')}` : '');
@@ -20745,6 +20762,14 @@ function printBulkResults() {
 // Failures (e.g. storage quota) are swallowed — this is a speed
 // optimization, never a requirement, so the app works exactly as before if
 // caching isn't possible for any reason.
+// دمج كتابات التخزين — كان كل مستشفى يكتب مفتاحه الخاص فور معالجته
+// (10-18 عملية كتابة منفصلة لكل مزامنة كاملة)، وهذا بالضبط سبب تجاوز
+// حد Cloudflare KV اليومي المجاني (1000 عملية كتابة/يوم) بسرعة، مؤكَّد
+// كحالة واقعية حقيقية (خطأ "KV put() limit exceeded for the day" رُصد
+// فعليًا). الآن تُجمَّع بيانات كل مستشفيات نفس الوحدة بكائن واحد
+// بالذاكرة أول، وتُكتب دفعة واحدة بمفتاحين إجمالًا (بدل عشرات) بنهاية
+// كل مزامنة كاملة عبر flushFileCacheBatch().
+const _fileCacheBatch = { breast: {}, colon: {} };
 async function saveReportFileCache(moduleKey, hospital) {
   try {
     const st = reportStateStore[moduleKey] && reportStateStore[moduleKey][hospital];
@@ -20758,29 +20783,26 @@ async function saveReportFileCache(moduleKey, hospital) {
     // next time the page loads.
     let mergedPending = st.pending;
     try {
-      const existingRaw = await storageGet(`raqeeb_fileCache_${moduleKey}_${hospital}`);
-      if (existingRaw) {
-        const existing = JSON.parse(existingRaw);
-        if (existing.pending && existing.pending.headerRow &&
-            existing.pending.headerRow.length === st.pending.headerRow.length &&
-            st.colIdx >= 0) {
-          // IDs present in the NEW upload — used only to decide which OLD
-          // cached rows to drop (they're superseded), never to drop rows
-          // from the new upload itself. This is the key fix: a Map keyed
-          // by ID would silently collapse the new upload's OWN internal
-          // duplicates too, which is exactly what broke the report's
-          // duplicate counter — it never got to see them.
-          const newIds = new Set();
-          st.pending.dataRows.forEach(r => {
-            const id = String(r[st.colIdx] ?? '').trim();
-            if (id) newIds.add(id);
-          });
-          const oldRowsNotSuperseded = existing.pending.dataRows.filter(r => {
-            const id = String(r[st.colIdx] ?? '').trim();
-            return id && !newIds.has(id);
-          });
-          mergedPending = { headerRow: st.pending.headerRow, dataRows: [...oldRowsNotSuperseded, ...st.pending.dataRows] };
-        }
+      const existing = _fileCacheBatch[moduleKey][hospital];
+      if (existing && existing.pending && existing.pending.headerRow &&
+          existing.pending.headerRow.length === st.pending.headerRow.length &&
+          st.colIdx >= 0) {
+        // IDs present in the NEW upload — used only to decide which OLD
+        // cached rows to drop (they're superseded), never to drop rows
+        // from the new upload itself. This is the key fix: a Map keyed
+        // by ID would silently collapse the new upload's OWN internal
+        // duplicates too, which is exactly what broke the report's
+        // duplicate counter — it never got to see them.
+        const newIds = new Set();
+        st.pending.dataRows.forEach(r => {
+          const id = String(r[st.colIdx] ?? '').trim();
+          if (id) newIds.add(id);
+        });
+        const oldRowsNotSuperseded = existing.pending.dataRows.filter(r => {
+          const id = String(r[st.colIdx] ?? '').trim();
+          return id && !newIds.has(id);
+        });
+        mergedPending = { headerRow: st.pending.headerRow, dataRows: [...oldRowsNotSuperseded, ...st.pending.dataRows] };
       }
     } catch (e) { /* if merging fails for any reason, just cache the new data alone rather than losing the upload entirely */ }
 
@@ -20791,20 +20813,45 @@ async function saveReportFileCache(moduleKey, hospital) {
       uploadedAt: st.uploadedAt || null,
       cachedAt: new Date().toISOString(),
     };
-    await storageSet(`raqeeb_fileCache_${moduleKey}_${hospital}`, JSON.stringify(payload));
+    // يُكتب بالذاكرة فقط هنا — الكتابة الفعلية للتخزين المشترك تصير لاحقًا
+    // دفعة واحدة عبر flushFileCacheBatch().
+    _fileCacheBatch[moduleKey][hospital] = payload;
     // Reflect the merged data back into the live session too — otherwise
     // the on-screen state and the cached state would silently disagree
     // until the next reload.
     st.pending = mergedPending;
   } catch (e) { /* caching is a speed optimization only — never block on it */ }
 }
+// يكتب كل بيانات _fileCacheBatch المجمَّعة بالذاكرة — مفتاحين إجمالًا
+// (واحد لكل وحدة)، بدل عشرات المفاتيح المنفصلة. يُستدعى مرة وحدة بس
+// بنهاية كل مزامنة كاملة (refreshAllFromGitHub)، بعد ما تخلص معالجة
+// كل المستشفيات.
+async function flushFileCacheBatch() {
+  for (const moduleKey of ['breast', 'colon']) {
+    if (Object.keys(_fileCacheBatch[moduleKey]).length === 0) continue;
+    try {
+      // يدمج مع أي بيانات محفوظة سابقًا لمستشفيات ما اتحدّثت بهالدفعة
+      // (لو حصل فشل جزئي بمستشفى معيّن، بياناته القديمة المحفوظة تبقى).
+      let combined = {};
+      try {
+        const existingRaw = await storageGet(`raqeeb_fileCacheAll_${moduleKey}`);
+        if (existingRaw) combined = JSON.parse(existingRaw) || {};
+      } catch (e) { /* ignore, start fresh */ }
+      Object.assign(combined, _fileCacheBatch[moduleKey]);
+      await storageSet(`raqeeb_fileCacheAll_${moduleKey}`, JSON.stringify(combined));
+    } catch (e) { console.error(`flushFileCacheBatch failed for ${moduleKey}`, e); }
+  }
+}
 async function restoreReportFileCaches() {
   for (const moduleKey of ['breast', 'colon']) {
+    let combined = {};
+    try {
+      const raw = await storageGet(`raqeeb_fileCacheAll_${moduleKey}`);
+      if (raw) combined = JSON.parse(raw) || {};
+    } catch (e) { continue; }
     for (const hospital of REPORT_HOSPITALS) {
       try {
-        const raw = await storageGet(`raqeeb_fileCache_${moduleKey}_${hospital}`);
-        if (!raw) continue;
-        const payload = JSON.parse(raw);
+        const payload = combined[hospital];
         if (!payload || !payload.pending) continue;
         const st = reportStateStore[moduleKey][hospital];
         st.pending = payload.pending;
