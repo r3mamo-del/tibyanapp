@@ -2561,12 +2561,12 @@
         <label class="lbl" data-i18n="afifTargetCentersLbl">مستهدفات المراكز الصحية</label>
         <div class="grid2 mb14" style="gap:10px">
           <div>
-            <label class="lbl" style="font-weight:400" data-i18n="afifCenterNorth">شمال عفيف — شهري</label>
-            <input type="number" min="0" id="afifTargetCenterNorthMonthly" onchange="updateAfifFacilityTarget('centerNorth','monthly', this.value)" />
+            <label class="lbl" style="font-weight:400" data-i18n="afifClinicLbl">العيادات — شهري</label>
+            <input type="number" min="0" id="afifTargetClinicMonthly" onchange="updateAfifFacilityTarget('clinic','monthly', this.value)" />
           </div>
           <div>
-            <label class="lbl" style="font-weight:400" data-i18n="afifCenterNorthWeekly">شمال عفيف — أسبوعي</label>
-            <input type="number" min="0" id="afifTargetCenterNorthWeekly" onchange="updateAfifFacilityTarget('centerNorth','weekly', this.value)" />
+            <label class="lbl" style="font-weight:400" data-i18n="afifClinicWeeklyLbl">العيادات — أسبوعي</label>
+            <input type="number" min="0" id="afifTargetClinicWeekly" onchange="updateAfifFacilityTarget('clinic','weekly', this.value)" />
           </div>
         </div>
         <div class="grid2 mb14" style="gap:10px">
@@ -2591,6 +2591,16 @@
         </div>
         <div class="grid2 mb14" style="gap:10px">
           <div>
+            <label class="lbl" style="font-weight:400" data-i18n="afifCenterNorth">شمال عفيف — شهري</label>
+            <input type="number" min="0" id="afifTargetCenterNorthMonthly" onchange="updateAfifFacilityTarget('centerNorth','monthly', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400" data-i18n="afifCenterNorthWeekly">شمال عفيف — أسبوعي</label>
+            <input type="number" min="0" id="afifTargetCenterNorthWeekly" onchange="updateAfifFacilityTarget('centerNorth','weekly', this.value)" />
+          </div>
+        </div>
+        <div class="grid2 mb14" style="gap:10px">
+          <div>
             <label class="lbl" style="font-weight:400" data-i18n="afifCenterSulaimaniyah">السليمانية — شهري</label>
             <input type="number" min="0" id="afifTargetCenterSulaimaniyahMonthly" onchange="updateAfifFacilityTarget('centerSulaimaniyah','monthly', this.value)" />
           </div>
@@ -2601,12 +2611,12 @@
         </div>
         <div class="grid2 mb14" style="gap:10px">
           <div>
-            <label class="lbl" style="font-weight:400" data-i18n="afifClinicLbl">العيادات — شهري</label>
-            <input type="number" min="0" id="afifTargetClinicMonthly" onchange="updateAfifFacilityTarget('clinic','monthly', this.value)" />
+            <label class="lbl" style="font-weight:400" data-i18n="afifCommunityHealthLbl">صحة المجتمع — شهري</label>
+            <input type="number" min="0" id="afifTargetCommunityHealthMonthly" onchange="updateAfifFacilityTarget('communityHealth','monthly', this.value)" />
           </div>
           <div>
-            <label class="lbl" style="font-weight:400" data-i18n="afifClinicWeeklyLbl">العيادات — أسبوعي</label>
-            <input type="number" min="0" id="afifTargetClinicWeekly" onchange="updateAfifFacilityTarget('clinic','weekly', this.value)" />
+            <label class="lbl" style="font-weight:400" data-i18n="afifCommunityHealthWeeklyLbl">صحة المجتمع — أسبوعي</label>
+            <input type="number" min="0" id="afifTargetCommunityHealthWeekly" onchange="updateAfifFacilityTarget('communityHealth','weekly', this.value)" />
           </div>
         </div>
         <div class="grid2 mb14" style="gap:10px">
@@ -2617,16 +2627,6 @@
           <div>
             <label class="lbl" style="font-weight:400" data-i18n="afifRadiologyWeeklyLbl">الأشعة — أسبوعي</label>
             <input type="number" min="0" id="afifTargetRadiologyWeekly" onchange="updateAfifFacilityTarget('radiology','weekly', this.value)" />
-          </div>
-        </div>
-        <div class="grid2 mb14" style="gap:10px">
-          <div>
-            <label class="lbl" style="font-weight:400" data-i18n="afifCommunityHealthLbl">صحة المجتمع — شهري</label>
-            <input type="number" min="0" id="afifTargetCommunityHealthMonthly" onchange="updateAfifFacilityTarget('communityHealth','monthly', this.value)" />
-          </div>
-          <div>
-            <label class="lbl" style="font-weight:400" data-i18n="afifCommunityHealthWeeklyLbl">صحة المجتمع — أسبوعي</label>
-            <input type="number" min="0" id="afifTargetCommunityHealthWeekly" onchange="updateAfifFacilityTarget('communityHealth','weekly', this.value)" />
           </div>
         </div>
         <div id="afif-facility-target-status" class="file-status"></div>
@@ -3282,7 +3282,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 7.4.0</span>
+  <span id="app-version">الإصدار 7.5.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -7305,16 +7305,15 @@ function buildFacilityBreakdownHtml(range) {
       </div>
       <div style="font-size:10.5px; font-weight:700; color:var(--muted); margin:12px 0 8px">${t('facilityCenterLbl')}</div>
       ${[
-        { label: t('afifCenterNorth'), n: counts.centerNorth, key: 'centerNorth' },
+        { label: t('afifClinicLbl'), n: counts.clinic, key: 'clinic' },
         { label: t('afifCenterEast'), n: counts.centerEast, key: 'centerEast' },
         { label: t('afifCenterWest'), n: counts.centerWest, key: 'centerWest' },
+        { label: t('afifCenterNorth'), n: counts.centerNorth, key: 'centerNorth' },
         { label: t('afifCenterSulaimaniyah'), n: counts.centerSulaimaniyah, key: 'centerSulaimaniyah' },
+        { label: t('facilityOtherLbl'), n: counts.other, key: null },
         { label: t('afifCommunityHealth'), n: counts.communityHealth, key: 'communityHealth' },
-      ].sort((a, b) => b.n - a.n).map(c => row(c.label, c.n, c.key)).join('')}
-      <div style="font-size:10.5px; font-weight:700; color:var(--muted); margin:12px 0 8px">${t('afifOtherServicesLbl')}</div>
-      ${row(t('afifClinicLbl'), counts.clinic, 'clinic')}
-      ${row(t('afifRadiologyLbl'), counts.radiology, 'radiology')}
-      ${row(t('facilityOtherLbl'), counts.other, null)}
+        { label: t('afifRadiologyLbl'), n: counts.radiology, key: 'radiology' },
+      ].map(c => row(c.label, c.n, c.key)).join('')}
     </div>`;
 }
 
@@ -19070,15 +19069,15 @@ function generateReport(autoRefresh) {
           const facTargetKey = (reportPeriodVal === 'week_current' || reportPeriodVal === 'week_previous') ? 'weekly' : 'monthly';
           const facTarget = key => (afifFacilityTargets[key] || {})[facTargetKey] || 0;
           const facRows = [
-            { label: t('afifCenterNorth'), n: fCounts.centerNorth, target: facTarget('centerNorth'), pinLast: false },
-            { label: t('afifCenterEast'), n: fCounts.centerEast, target: facTarget('centerEast'), pinLast: false },
-            { label: t('afifCenterWest'), n: fCounts.centerWest, target: facTarget('centerWest'), pinLast: false },
-            { label: t('afifCenterSulaimaniyah'), n: fCounts.centerSulaimaniyah, target: facTarget('centerSulaimaniyah'), pinLast: false },
-            { label: t('afifCommunityHealth'), n: fCounts.communityHealth, target: facTarget('communityHealth'), pinLast: false },
-            { label: t('afifClinicLbl'), n: fCounts.clinic, target: facTarget('clinic'), pinLast: false },
-            { label: t('afifRadiologyLbl'), n: fCounts.radiology, target: facTarget('radiology'), pinLast: true },
-            { label: t('facilityOtherLbl'), n: fCounts.other, target: 0, pinLast: true },
-          ].sort((a, b) => (a.pinLast === b.pinLast) ? (b.n - a.n) : (a.pinLast ? 1 : -1));
+            { label: t('afifClinicLbl'), n: fCounts.clinic, target: facTarget('clinic') },
+            { label: t('afifCenterEast'), n: fCounts.centerEast, target: facTarget('centerEast') },
+            { label: t('afifCenterWest'), n: fCounts.centerWest, target: facTarget('centerWest') },
+            { label: t('afifCenterNorth'), n: fCounts.centerNorth, target: facTarget('centerNorth') },
+            { label: t('afifCenterSulaimaniyah'), n: fCounts.centerSulaimaniyah, target: facTarget('centerSulaimaniyah') },
+            { label: t('facilityOtherLbl'), n: fCounts.other, target: 0 },
+            { label: t('afifCommunityHealth'), n: fCounts.communityHealth, target: facTarget('communityHealth') },
+            { label: t('afifRadiologyLbl'), n: fCounts.radiology, target: facTarget('radiology') },
+          ];
           centerRows = facRows.map(f => {
             const fPct = f.target > 0 ? Math.round((f.n / f.target) * 100) : 0;
             return `
