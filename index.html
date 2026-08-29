@@ -3305,7 +3305,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.1.0</span>
+  <span id="app-version">الإصدار 8.1.1-تشخيص</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -20804,17 +20804,23 @@ document.addEventListener('keydown', (e) => {
 });
 
 function printReport() {
+  alert('1: بدأت الدالة');
   const range = resolveReportRange(document.getElementById('reportPeriod').value);
+  alert('2: range = ' + JSON.stringify(range ? 'موجود' : 'فاضي'));
   const originalTitle = document.title;
   if (range) document.title = buildSafePrintFilename(['Performance-Report', asciiModLabel(), range.from.toISOString().slice(0,10), 'to', range.to.toISOString().slice(0,10)]);
+  alert('3: قبل تغيير الكلاس');
   document.body.classList.add('printing-report');
+  alert('4: بعد تغيير الكلاس، قبل offsetHeight');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
+  alert('5: قبل window.print() مباشرة');
   // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
   // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
   // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
   // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
   // توقفت بالآيباد).
       window.print();
+      alert('6: بعد window.print() — لو ما طلعت نافذة طباعة، المشكلة داخل نظام iPadOS نفسه');
       setTimeout(() => { document.body.classList.remove('printing-report'); }, 500);
       setTimeout(() => { document.title = originalTitle; }, 4000);
 }
