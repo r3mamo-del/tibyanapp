@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl" data-theme="dark">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Screening 2care</title>
 
 <!-- دعم "إضافة للشاشة الرئيسية" بالآيفون — يفتح بملء الشاشة بدون شريط
@@ -3282,7 +3282,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 7.7.0</span>
+  <span id="app-version">الإصدار 7.8.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -7323,6 +7323,18 @@ function switchTab(name) {
   const newPanel = document.getElementById('panel-' + name);
   newPanel.classList.add('active');
   event.currentTarget.classList.add('active');
+  // يرجّع مستوى التكبير للحجم الطبيعي (100%) تلقائيًا عند تبديل الصفحات
+  // الرئيسية — بدل منع التكبير كليًا (يحرم المستخدم من ميزة مفيدة
+  // لمشاكل عرض ثانية). مؤكَّد كحالة واقعية حقيقية: تراكب اللوحات (بحث +
+  // إدارة معًا) يصير تحديدًا بعد تكبير/تصغير الشاشة بإصبعين بمتصفح
+  // Safari iOS — تصفير التكبير هنا يمنع المشكلة من أساسها، مع إبقاء
+  // إمكانية التكبير متاحة بأي وقت أثناء الاستخدام العادي.
+  const vp = document.querySelector('meta[name="viewport"]');
+  if (vp) {
+    const original = vp.getAttribute('content');
+    vp.setAttribute('content', original + ', maximum-scale=1.0');
+    requestAnimationFrame(() => { vp.setAttribute('content', original); });
+  }
   // إجبار إعادة رسم فوري بعد تبديل اللوحة الرئيسية — قيد رسم معروف
   // بمتصفح Safari iOS تحديدًا (مدموج مع هيدر sticky) يخلي المتصفح أحيانًا
   // "ينسى" يمسح بكسلات اللوحة السابقة، فتبان لوحتين متراكبتين فوق
@@ -20921,18 +20933,6 @@ async function restoreReportFileCaches() {
   }
 }
 async function initApp() {
-  // منع التكبير بإصبعين (pinch-zoom) صراحة عبر JS — طبقة حماية إضافية،
-  // بما إن علامة viewport (user-scalable=no) وحدها أحيانًا ما تكفي 100%
-  // ببعض إصدارات Safari iOS الحديثة (تتجاهلها لأسباب accessibility).
-  // مؤكَّد كسبب جذري حقيقي لمشكلتين منفصلتين (تراكب اللوحات + طباعة
-  // خاطئة) — كلاهما يصير تحديدًا بعد تكبير/تصغير الشاشة بإصبعين.
-  document.addEventListener('gesturestart', e => e.preventDefault());
-  let lastTouchEnd = 0;
-  document.addEventListener('touchend', e => {
-    const now = Date.now();
-    if (now - lastTouchEnd <= 300) e.preventDefault(); // يمنع "double-tap to zoom" كمان
-    lastTouchEnd = now;
-  }, { passive: false });
   document.body.classList.add('module-' + currentModule);
   updateHeaderModuleBadge();
   await restoreLanguage();
