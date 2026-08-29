@@ -1943,6 +1943,18 @@
   @media (max-width: 760px) {
     .module-badge { display: none; }
   }
+  /* فجوة تجاوب لعرض الآيباد تحديدًا (768–1024px تقريبًا) — كل قواعد
+     الاستجابة الموجودة كانت تتوقف عند 760px، فهالنطاق يقع كامل خارج
+     التغطية. صف أزرار الهيدر (المؤشرات/البحث/المشرف + اللغة + التنبيهات)
+     كان يفيض أفقيًا بصمت بدون أي تمرير، فبعض الأزرار تختفي فعليًا خارج
+     حدود الشاشة، مؤكَّد كحالة واقعية حقيقية. التمرير الأفقي هنا يضمن
+     الوصول لكل الأزرار دائمًا، حتى لو الشاشة أضيق من التصميم الأصلي. */
+  @media (min-width: 761px) and (max-width: 1024px) {
+    header { padding: 0 12px; }
+    .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; scrollbar-width: thin; }
+    .tabs::-webkit-scrollbar { height: 3px; }
+    .tab { flex-shrink: 0; }
+  }
   body.printing-report #module-switcher { display: none !important; }
   body.printing-report .welcome-banner { display: none !important; }
   body.printing-report #critical-alert-banner { display: none !important; }
@@ -3282,7 +3294,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 7.9.0</span>
+  <span id="app-version">الإصدار 8.0.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6054,16 +6066,17 @@ function printHub5ReportSet() {
     document.body.classList.add('printing-hub-combined');
     if (overlay) overlay.style.display = 'none';
     document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+    // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+    // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+    // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+    // توقفت بالآيباد).
         window.print();
         setTimeout(() => {
           document.body.classList.remove('printing-hub-combined');
           switchAdminPage('printhub'); // return here after giving the print dialog time to open
         }, 1200);
         setTimeout(() => { document.title = originalTitle; }, 4000);
-      });
-    });
   };
 
   // Step 1: تقرير الأداء — sync dates + hospital scope, generate, then capture #report-output.
@@ -6256,13 +6269,14 @@ function printHubAllPositive() {
   document.title = buildSafePrintFilename(['All-Reports', asciiModLabel(), new Date().toISOString().slice(0,10)]);
   document.body.classList.add('printing-hub-combined');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+  // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+  // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+  // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+  // توقفت بالآيباد).
       window.print();
       setTimeout(() => { document.body.classList.remove('printing-hub-combined'); }, 500);
       setTimeout(() => { document.title = originalTitle; }, 4000);
-    });
-  });
 }
 function printHubTrigger(targetPage, printFn) {
   const from = document.getElementById('printhub-from')?.value || '';
@@ -13432,13 +13446,14 @@ function printOverdueCasesReport(skipPrint, explicitHospitalScope) {
   if (skipPrint) return;
   document.body.classList.add('printing-overdue-cases');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+  // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+  // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+  // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+  // توقفت بالآيباد).
       window.print();
       setTimeout(() => { document.body.classList.remove('printing-overdue-cases'); }, 500);
       setTimeout(() => { document.title = originalTitle; }, 4000);
-    });
-  });
 }
 function printConfirmedCasesList() {
   if (lastConfirmedCasesForPrint.length === 0) { showAlertModal(t('noCancerCasesFound')); return; }
@@ -13468,13 +13483,14 @@ function printConfirmedCasesList() {
   document.title = buildSafePrintFilename(['Confirmed-Cases', asciiModLabel(), new Date().toISOString().slice(0,10)]);
   document.body.classList.add('printing-confirmed-cases');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+  // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+  // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+  // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+  // توقفت بالآيباد).
       window.print();
       setTimeout(() => { document.body.classList.remove('printing-confirmed-cases'); }, 500);
       setTimeout(() => { document.title = originalTitle; }, 4000);
-    });
-  });
 }
 function classifyColonOutcome(e) {
   const text = `${e.finalDiagnosis || ''} ${e.endoscopyResult || ''}`.toLowerCase();
@@ -18672,8 +18688,11 @@ function printIndicatorsReport() {
   document.title = buildSafePrintFilename(['Early-Detection-Report', asciiModLabel()]);
   document.body.classList.add('printing-indicators');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+  // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+  // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+  // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+  // توقفت بالآيباد).
       window.print();
       setTimeout(() => {
         document.body.classList.remove('printing-indicators');
@@ -18685,8 +18704,6 @@ function printIndicatorsReport() {
       // under the ORIGINAL title instead, which can fail to open correctly on
       // some devices depending on its characters/length. Give it much longer.
       setTimeout(() => { document.title = originalTitle; }, 4000);
-    });
-  });
 }
 function printPositiveDashboard() {
   const cardEl = document.getElementById('positive-dashboard-card');
@@ -18701,13 +18718,14 @@ function printPositiveDashboard() {
   document.body.classList.add('printing-positive');
   if (scopeVal === 'عفيف') document.body.classList.add('printing-positive-afif');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+  // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+  // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+  // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+  // توقفت بالآيباد).
       window.print();
       setTimeout(() => { document.body.classList.remove('printing-positive'); document.body.classList.remove('printing-positive-afif'); }, 500);
       setTimeout(() => { document.title = originalTitle; }, 4000);
-    });
-  });
 }
 function printDetailedReport() {
   const scope = document.getElementById('detailedReportPrintScope')?.value || 'all';
@@ -18733,16 +18751,17 @@ function printDetailedReport() {
   // cosmetic glitch.
   setTimeout(() => {
     document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+    // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+    // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+    // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+    // توقفت بالآيباد).
         window.print();
         setTimeout(() => {
           document.body.classList.remove('printing-detailed');
           hiddenEls.forEach(el => el.classList.remove('print-hide'));
         }, 500);
         setTimeout(() => { document.title = originalTitle; }, 4000);
-      });
-    });
   }, 750);
 }
 
@@ -19598,12 +19617,13 @@ function printColonIncompleteStepsChart() {
 
   document.body.classList.add('printing-colon-reasons');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+  // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+  // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+  // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+  // توقفت بالآيباد).
       window.print();
       setTimeout(() => { document.body.classList.remove('printing-colon-reasons'); }, 500);
-    });
-  });
 }
 function collectBreastIncompleteStepBreakdown(range) {
   const stepKeys = Object.keys(BREAST_INCOMPLETE_STEP_LABELS);
@@ -19717,12 +19737,13 @@ function printBreastIncompleteStepsChart() {
 
   document.body.classList.add('printing-breast-reasons');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+  // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+  // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+  // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+  // توقفت بالآيباد).
       window.print();
       setTimeout(() => { document.body.classList.remove('printing-breast-reasons'); }, 500);
-    });
-  });
 }
 function openAllUnreadableDatesModal() {
   const rows = collectAllUnreadableDates();
@@ -20357,13 +20378,14 @@ function printReportExcludedRows(skipPrint) {  const period = document.getElemen
   if (skipPrint) return;
   document.body.classList.add('printing-excluded-notes');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+  // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+  // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+  // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+  // توقفت بالآيباد).
       window.print();
       setTimeout(() => { document.body.classList.remove('printing-excluded-notes'); }, 500);
       setTimeout(() => { document.title = originalTitle; }, 4000);
-    });
-  });
 }
 
 // Focused, standalone view of duplicate cases only (both within-file and
@@ -20562,13 +20584,14 @@ function printPreventionReport(skipPrint) {
   if (skipPrint) return;
   document.body.classList.add('printing-prevention-report');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+  // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+  // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+  // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+  // توقفت بالآيباد).
       window.print();
       setTimeout(() => { document.body.classList.remove('printing-prevention-report'); }, 500);
       setTimeout(() => { document.title = originalTitle; }, 4000);
-    });
-  });
 }
 
 function exportReportExcel() {
@@ -20775,13 +20798,14 @@ function printReport() {
   if (range) document.title = buildSafePrintFilename(['Performance-Report', asciiModLabel(), range.from.toISOString().slice(0,10), 'to', range.to.toISOString().slice(0,10)]);
   document.body.classList.add('printing-report');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+  // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+  // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+  // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+  // توقفت بالآيباد).
       window.print();
       setTimeout(() => { document.body.classList.remove('printing-report'); }, 500);
       setTimeout(() => { document.title = originalTitle; }, 4000);
-    });
-  });
 }
 
 // Print/PDF for the bulk-scan ("البحث بملف Excel") results — shows exactly
@@ -20800,13 +20824,14 @@ function printBulkResults() {
   if (footEl) footEl.innerHTML = buildPrintBrandFooterHtml();
   document.body.classList.add('printing-bulk');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
+  // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
+  // المستخدم المباشرة؛ أي تأخير (حتى RAF) كان يخلي الطباعة تُرفض كليًا
+  // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
+  // توقفت بالآيباد).
       window.print();
       setTimeout(() => { document.body.classList.remove('printing-bulk'); }, 500);
       setTimeout(() => { document.title = originalTitle; }, 4000);
-    });
-  });
 }
 
 
