@@ -3282,7 +3282,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 7.5.0</span>
+  <span id="app-version">الإصدار 7.6.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -7320,8 +7320,19 @@ function buildFacilityBreakdownHtml(range) {
 function switchTab(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('panel-' + name).classList.add('active');
+  const newPanel = document.getElementById('panel-' + name);
+  newPanel.classList.add('active');
   event.currentTarget.classList.add('active');
+  // إجبار إعادة رسم فوري بعد تبديل اللوحة الرئيسية — قيد رسم معروف
+  // بمتصفح Safari iOS تحديدًا (مدموج مع هيدر sticky) يخلي المتصفح أحيانًا
+  // "ينسى" يمسح بكسلات اللوحة السابقة، فتبان لوحتين متراكبتين فوق
+  // بعض (بحث + إدارة معًا)، مؤكَّد كحالة واقعية حقيقية (فيديو من آيفون).
+  // قراءة offsetHeight تُجبر إعادة حساب التخطيط، وتبديل الشفافية اللحظي
+  // يُجبر إعادة التركيب البصري (compositing) كمان — الاثنين معًا أثبتا
+  // فعاليتهما بمشاكل "طلاء قديم عالق" المشابهة بـSafari iOS.
+  document.body.offsetHeight;
+  newPanel.style.opacity = '0.999';
+  requestAnimationFrame(() => { newPanel.style.opacity = ''; });
   if (name === 'search') refreshPublicUI();
   if (name === 'admin')  refreshAdminUI();
   if (name === 'indicators') setIndicatorsPeriod(indicatorsPeriod);
