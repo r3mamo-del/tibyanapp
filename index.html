@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl" data-theme="dark">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Screening 2care</title>
 
 <!-- دعم "إضافة للشاشة الرئيسية" بالآيفون — يفتح بملء الشاشة بدون شريط
@@ -3282,7 +3282,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 7.6.0</span>
+  <span id="app-version">الإصدار 7.7.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -20921,6 +20921,18 @@ async function restoreReportFileCaches() {
   }
 }
 async function initApp() {
+  // منع التكبير بإصبعين (pinch-zoom) صراحة عبر JS — طبقة حماية إضافية،
+  // بما إن علامة viewport (user-scalable=no) وحدها أحيانًا ما تكفي 100%
+  // ببعض إصدارات Safari iOS الحديثة (تتجاهلها لأسباب accessibility).
+  // مؤكَّد كسبب جذري حقيقي لمشكلتين منفصلتين (تراكب اللوحات + طباعة
+  // خاطئة) — كلاهما يصير تحديدًا بعد تكبير/تصغير الشاشة بإصبعين.
+  document.addEventListener('gesturestart', e => e.preventDefault());
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) e.preventDefault(); // يمنع "double-tap to zoom" كمان
+    lastTouchEnd = now;
+  }, { passive: false });
   document.body.classList.add('module-' + currentModule);
   updateHeaderModuleBadge();
   await restoreLanguage();
