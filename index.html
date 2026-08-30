@@ -1649,7 +1649,7 @@
   /* ─── Help / credits modal ─── */
   #help-modal-overlay {
     display: none;
-    position: fixed; inset: 0;
+    position: fixed; inset: 0; width: 100vw; height: 100vh;
     background: rgba(15,22,38,.72);
     z-index: 2000;
     align-items: center;
@@ -1693,7 +1693,7 @@
   }
   #info-modal-overlay {
     display: none;
-    position: fixed; inset: 0;
+    position: fixed; inset: 0; width: 100vw; height: 100vh;
     background: rgba(15,22,38,.35);
     z-index: 2100;
     align-items: flex-start;
@@ -1746,7 +1746,7 @@
      app's password fields. ─── */
   #pw-confirm-overlay {
     display: none;
-    position: fixed; inset: 0;
+    position: fixed; inset: 0; width: 100vw; height: 100vh;
     background: rgba(15,22,38,.72);
     z-index: 2100;
     align-items: center;
@@ -1769,7 +1769,7 @@
 
   #nudge-overlay {
     display: none;
-    position: fixed; inset: 0;
+    position: fixed; inset: 0; width: 100vw; height: 100vh;
     background: rgba(15,22,38,.72);
     z-index: 2100;
     align-items: center;
@@ -1986,7 +1986,7 @@
 </style>
 </head>
 <body>
-  <div id="printhub-loading-overlay" style="display:none; position:fixed; inset:0; z-index:99999; background:var(--bg); align-items:center; justify-content:center; flex-direction:column; gap:14px">
+  <div id="printhub-loading-overlay" style="display:none; position:fixed; inset:0; width:100vw; height:100vh; z-index:99999; background:var(--bg); align-items:center; justify-content:center; flex-direction:column; gap:14px">
     <div style="position:absolute; inset:0; background-image:var(--wm-logo); background-repeat:no-repeat; background-position:center; background-size:340px; opacity:.08; pointer-events:none"></div>
     <div style="width:44px; height:44px; border:4px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite"></div>
     <div id="printhub-loading-overlay-text" style="font-size:13px; font-weight:700; color:var(--accent)" data-i18n="printHubBuildingMsg">جاري تجهيز التقارير…</div>
@@ -3380,7 +3380,7 @@
   </div>
 </div>
 
-<div id="loading-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,22,38,.45); z-index:3000; align-items:center; justify-content:center; padding:20px">
+<div id="loading-overlay" style="display:none; position:fixed; inset:0; width:100vw; height:100vh; background:rgba(15,22,38,.45); z-index:3000; align-items:center; justify-content:center; padding:20px">
   <div style="background:var(--surface); border-radius:18px; padding:26px 34px; box-shadow:0 20px 50px rgba(10,16,30,.35); display:flex; flex-direction:column; align-items:center; gap:14px; min-width:180px">
     <div style="width:38px; height:38px; border:4px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:loadingSpin .8s linear infinite"></div>
     <div id="loading-overlay-text" style="font-size:13px; font-weight:700; color:var(--text); text-align:center">جاري التجهيز...</div>
@@ -3388,7 +3388,7 @@
 </div>
 <style>@keyframes loadingSpin { to { transform: rotate(360deg); } }</style>
 
-<div id="confirm-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,22,38,.5); z-index:2200; align-items:center; justify-content:center; padding:20px">
+<div id="confirm-modal-overlay" style="display:none; position:fixed; inset:0; width:100vw; height:100vh; background:rgba(15,22,38,.5); z-index:2200; align-items:center; justify-content:center; padding:20px">
   <div id="confirm-modal-box" style="background:var(--surface); border-radius:18px; max-width:360px; width:100%; overflow:hidden; box-shadow:0 20px 50px rgba(10,16,30,.35); border:1px solid rgba(255,255,255,.6)">
     <div style="background:linear-gradient(90deg, #1F3F8F, #2c56b8); color:#fff; padding:14px 18px; font-weight:800; font-size:14px" id="confirm-modal-title-text">Screening 2care</div>
     <div id="confirm-modal-body" style="padding:18px; font-size:13px; line-height:1.9; color:var(--ink); white-space:pre-wrap"></div>
