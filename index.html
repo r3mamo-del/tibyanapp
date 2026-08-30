@@ -1688,7 +1688,7 @@
      بالمتصفح يتجاوز القيد كليًا. مطبَّقة هنا على كل النوافذ المنبثقة
      ذات الخلفية الصلبة أو شبه الصلبة بالتطبيق دفعة واحدة. */
   #info-modal-overlay, #confirm-modal-overlay, #loading-overlay,
-  #printhub-loading-overlay, #help-modal-overlay {
+  #help-modal-overlay {
     opacity: 0.999;
   }
   #info-modal-overlay {
@@ -1975,12 +1975,6 @@
 </style>
 </head>
 <body>
-  <div id="printhub-loading-overlay" style="display:none; position:fixed; inset:0; width:100vw; height:100vh; z-index:99999; background:var(--bg); align-items:center; justify-content:center; flex-direction:column; gap:14px">
-    <div style="position:absolute; inset:0; background-image:var(--wm-logo); background-repeat:no-repeat; background-position:center; background-size:340px; opacity:.08; pointer-events:none"></div>
-    <div style="width:44px; height:44px; border:4px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite"></div>
-    <div id="printhub-loading-overlay-text" style="font-size:13px; font-weight:700; color:var(--accent)" data-i18n="printHubBuildingMsg">جاري تجهيز التقارير…</div>
-  </div>
-  <style>@keyframes spin{ to{ transform:rotate(360deg) } }</style>
 
 <!-- ═══ GATEWAY — external landing page: choose Afif Hospital (restricted)
      or the full Breast/Colon Oncology Pathway. Each choice is password
@@ -3308,7 +3302,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.7.2</span>
+  <span id="app-version">الإصدار 8.7.4</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6056,8 +6050,7 @@ function populatePrintHubScopeOptions() {
 // it (several of them share the same container). All captured sections
 // are combined into one printout at the end, with a single real print.
 function printHub5ReportSet() {
-  const overlay = document.getElementById('printhub-loading-overlay');
-  if (overlay) overlay.style.display = 'flex';
+  showLoadingOverlay('جاري تجهيز التقارير...');
   const sections = [];
   const hubHospital = document.getElementById('printhub-hospital')?.value || 'all';
 
@@ -6071,7 +6064,7 @@ function printHub5ReportSet() {
   const ph5FailSafeTimer = setTimeout(() => {
     if (ph5Finished) return;
     console.error('printHub5ReportSet: fail-safe triggered — did not finish within 12s, forcing overlay hidden.');
-    if (overlay) overlay.style.display = 'none';
+    hideLoadingOverlay();
     showAlertModal(t('printHubNoContentMsg'));
     switchAdminPage('printhub');
   }, 12000);
@@ -6079,7 +6072,7 @@ function printHub5ReportSet() {
     console.error(`printHub5ReportSet ${step} failed — aborting safely`, e);
     ph5Finished = true;
     clearTimeout(ph5FailSafeTimer);
-    if (overlay) overlay.style.display = 'none';
+    hideLoadingOverlay();
     showAlertModal(t('printHubNoContentMsg'));
     switchAdminPage('printhub');
   };
@@ -6094,7 +6087,7 @@ function printHub5ReportSet() {
     if (container.firstElementChild) container.firstElementChild.style.pageBreakBefore = 'avoid';
 
     if (sections.length === 0) {
-      if (overlay) overlay.style.display = 'none';
+      hideLoadingOverlay();
       showAlertModal(t('printHubNoContentMsg'));
       switchAdminPage('printhub');
       return;
@@ -6103,7 +6096,7 @@ function printHub5ReportSet() {
     const originalTitle = document.title;
     document.title = buildSafePrintFilename(['Performance-Bundle', asciiModLabel(), new Date().toISOString().slice(0,10)]);
     document.body.classList.add('printing-hub-combined');
-    if (overlay) overlay.style.display = 'none';
+    hideLoadingOverlay();
     document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
     // window.print() يُستدعى هنا مباشرة (بدون أي تأخير بـrequestAnimationFrame) —
     // متصفح Safari بنظام iPadOS تحديدًا صارم جدًا بربط الطباعة بضغطة
@@ -6111,8 +6104,8 @@ function printHub5ReportSet() {
     // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
     // توقفت بالآيباد).
         window.print();
+        markPrintClassesForCleanup('printing-hub-combined');
         setTimeout(() => {
-          document.body.classList.remove('printing-hub-combined');
           switchAdminPage('printhub'); // return here after giving the print dialog time to open
         }, 1200);
         setTimeout(() => { document.title = originalTitle; }, 4000);
@@ -6321,7 +6314,7 @@ function printHubAllPositive() {
   // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
   // توقفت بالآيباد).
       window.print();
-      setTimeout(() => { document.body.classList.remove('printing-hub-combined'); }, 500);
+      markPrintClassesForCleanup('printing-hub-combined');
       setTimeout(() => { document.title = originalTitle; }, 4000);
 }
 function printHubTrigger(targetPage, printFn) {
@@ -12095,20 +12088,6 @@ function restoreBackup(input) {
 // ═══════════════════════════════════════════════════════
 //  UTILS
 // ═══════════════════════════════════════════════════════
-// Generic loading-overlay helpers — reuses the print-hub's spinner for
-// ANY operation that might take a noticeable moment (large-file scans,
-// report generation, print preparation), so the user always sees
-// something is happening instead of a frozen-looking screen.
-function showLoadingOverlay(message) {
-  const overlay = document.getElementById('printhub-loading-overlay');
-  const textEl = document.getElementById('printhub-loading-overlay-text');
-  if (textEl) textEl.textContent = message || 'جاري التحميل…';
-  if (overlay) overlay.style.display = 'flex';
-}
-function hideLoadingOverlay() {
-  const overlay = document.getElementById('printhub-loading-overlay');
-  if (overlay) overlay.style.display = 'none';
-}
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
@@ -13518,7 +13497,7 @@ function printOverdueCasesReport(skipPrint, explicitHospitalScope) {
   // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
   // توقفت بالآيباد).
       window.print();
-      setTimeout(() => { document.body.classList.remove('printing-overdue-cases'); }, 500);
+      markPrintClassesForCleanup('printing-overdue-cases');
       setTimeout(() => { document.title = originalTitle; }, 4000);
 }
 function printConfirmedCasesList() {
@@ -13555,7 +13534,7 @@ function printConfirmedCasesList() {
   // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
   // توقفت بالآيباد).
       window.print();
-      setTimeout(() => { document.body.classList.remove('printing-confirmed-cases'); }, 500);
+      markPrintClassesForCleanup('printing-confirmed-cases');
       setTimeout(() => { document.title = originalTitle; }, 4000);
 }
 function classifyColonOutcome(e) {
@@ -18769,10 +18748,9 @@ function printIndicatorsReport() {
   // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
   // توقفت بالآيباد).
       window.print();
-      setTimeout(() => {
-        document.body.classList.remove('printing-indicators');
+      markPrintClassesForCleanup('printing-indicators', () => {
         if (compareCard) compareCard.style.display = '';
-      }, 500);
+      });
       // The title becomes the suggested filename for "Save as PDF" — reverting
       // it too soon (before the person has actually finished the native print/
       // save dialog, which can take several seconds) means the file gets saved
@@ -18799,7 +18777,7 @@ function printPositiveDashboard() {
   // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
   // توقفت بالآيباد).
       window.print();
-      setTimeout(() => { document.body.classList.remove('printing-positive'); document.body.classList.remove('printing-positive-afif'); }, 500);
+      markPrintClassesForCleanup(['printing-positive', 'printing-positive-afif']);
       setTimeout(() => { document.title = originalTitle; }, 4000);
 }
 function printDetailedReport() {
@@ -18832,10 +18810,9 @@ function printDetailedReport() {
     // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
     // توقفت بالآيباد).
         window.print();
-        setTimeout(() => {
-          document.body.classList.remove('printing-detailed');
+        markPrintClassesForCleanup('printing-detailed', () => {
           hiddenEls.forEach(el => el.classList.remove('print-hide'));
-        }, 500);
+        });
         setTimeout(() => { document.title = originalTitle; }, 4000);
   }, 750);
 }
@@ -19698,7 +19675,7 @@ function printColonIncompleteStepsChart() {
   // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
   // توقفت بالآيباد).
       window.print();
-      setTimeout(() => { document.body.classList.remove('printing-colon-reasons'); }, 500);
+      markPrintClassesForCleanup('printing-colon-reasons');
 }
 function collectBreastIncompleteStepBreakdown(range) {
   const stepKeys = Object.keys(BREAST_INCOMPLETE_STEP_LABELS);
@@ -19818,7 +19795,7 @@ function printBreastIncompleteStepsChart() {
   // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
   // توقفت بالآيباد).
       window.print();
-      setTimeout(() => { document.body.classList.remove('printing-breast-reasons'); }, 500);
+      markPrintClassesForCleanup('printing-breast-reasons');
 }
 function openAllUnreadableDatesModal() {
   const rows = collectAllUnreadableDates();
@@ -19929,7 +19906,7 @@ function printDataEntryErrorsReportInner(range, skipPrint) {
     requestAnimationFrame(() => {
       hideLoadingOverlay();
       window.print();
-      setTimeout(() => { document.body.classList.remove('printing-excluded-notes'); }, 500);
+      markPrintClassesForCleanup('printing-excluded-notes');
       setTimeout(() => { document.title = originalTitle; }, 4000);
     });
   });
@@ -20459,7 +20436,7 @@ function printReportExcludedRows(skipPrint) {  const period = document.getElemen
   // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
   // توقفت بالآيباد).
       window.print();
-      setTimeout(() => { document.body.classList.remove('printing-excluded-notes'); }, 500);
+      markPrintClassesForCleanup('printing-excluded-notes');
       setTimeout(() => { document.title = originalTitle; }, 4000);
 }
 
@@ -20545,7 +20522,7 @@ function printDuplicateCasesReportInner(range, skipPrint) {
     requestAnimationFrame(() => {
       hideLoadingOverlay();
       window.print();
-      setTimeout(() => { document.body.classList.remove('printing-duplicate-cases'); }, 500);
+      markPrintClassesForCleanup('printing-duplicate-cases');
       setTimeout(() => { document.title = originalTitle2; }, 4000);
     });
   });
@@ -20665,7 +20642,7 @@ function printPreventionReport(skipPrint) {
   // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
   // توقفت بالآيباد).
       window.print();
-      setTimeout(() => { document.body.classList.remove('printing-prevention-report'); }, 500);
+      markPrintClassesForCleanup('printing-prevention-report');
       setTimeout(() => { document.title = originalTitle; }, 4000);
 }
 
@@ -20771,6 +20748,32 @@ function showInfoModal(title, bodyHtml, tone) {
   document.body.offsetHeight;
   overlay.style.opacity = '0.999';
   requestAnimationFrame(() => { overlay.style.opacity = ''; });
+}
+// ─── حارس عام لإزالة كلاس "printing-*" بعد انتهاء الطباعة الفعلية ──────────
+// كل دوال الطباعة كانت تضيف كلاس على body يحصر الطباعة على القسم المطلوب
+// بس (مثل printing-report، printing-hub-combined...)، تستدعي window.print()،
+// ثم تشيل الكلاس بعد setTimeout(500ms) ثابت — على افتراض إن الطباعة صارت
+// فورًا. لكن Safari بـiOS أحيانًا يعرض تأكيد "تم منع هذا الموقع من الطباعة
+// تلقائيًا" ويؤجّل الطباعة الفعلية للحظة ما يضغط المستخدم "السماح" — وقتها
+// يكون الـ500ms خلصت والكلاس انشال قبل ما توصل الطباعة الحقيقية، فتُطبع
+// الصفحة كاملة غير محصورة بدل التقرير المقصود فقط. مؤكَّد كحالة واقعية
+// حقيقية. الحل: حدث afterprint المدمَّج بالمتصفح يشتغل بدقة لحظة اكتمال/
+// إلغاء الطباعة الفعلية مهما كان التأخير، فنعتمد عليه بدل مهلة ثابتة.
+let __activePrintClasses = [];
+let __activePrintExtraCleanup = null;
+window.addEventListener('afterprint', () => {
+  if (__activePrintClasses.length) {
+    __activePrintClasses.forEach(c => document.body.classList.remove(c));
+    __activePrintClasses = [];
+  }
+  if (__activePrintExtraCleanup) {
+    try { __activePrintExtraCleanup(); } catch (e) { console.error('print cleanup failed', e); }
+    __activePrintExtraCleanup = null;
+  }
+});
+function markPrintClassesForCleanup(classes, extraCleanup) {
+  __activePrintClasses = Array.isArray(classes) ? classes : [classes];
+  __activePrintExtraCleanup = typeof extraCleanup === 'function' ? extraCleanup : null;
 }
 // Custom, branded replacement for the browser's native showAlertModal() — same
 // "نظام رقيب" styling as every other popup, instead of a generic
@@ -20887,7 +20890,7 @@ function printReport() {
   // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
   // توقفت بالآيباد).
       window.print();
-      setTimeout(() => { document.body.classList.remove('printing-report'); }, 500);
+      markPrintClassesForCleanup('printing-report');
       setTimeout(() => { document.title = originalTitle; }, 4000);
 }
 
@@ -20913,7 +20916,7 @@ function printBulkResults() {
   // بصمت بدون أي خطأ ظاهر، مؤكَّد كحالة واقعية حقيقية (كل أزرار الطباعة
   // توقفت بالآيباد).
       window.print();
-      setTimeout(() => { document.body.classList.remove('printing-bulk'); }, 500);
+      markPrintClassesForCleanup('printing-bulk');
       setTimeout(() => { document.title = originalTitle; }, 4000);
 }
 
