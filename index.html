@@ -3319,7 +3319,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.4.0</span>
+  <span id="app-version">الإصدار 8.5.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -7714,6 +7714,10 @@ async function gatewaySubmit() {
     document.getElementById('login-card').style.display   = 'none';
     document.getElementById('admin-content').style.display = 'block';
     if (afifRestrictedMode) applyAfifRestrictions();
+    // يعيد رسم بانر/جرس الإشعارات الحرجة فورًا — يضمن اختفاءها فعليًا لو
+    // كانت ظهرت أصلًا بشاشة التحميل الأولى (قبل ما يتحدَّد وضع عفيف
+    // المقيَّد)، بدل ما تبقى عالقة إلى أي تحديث بيانات لاحق.
+    renderCriticalAlerts();
     const exitBtn = document.getElementById('gateway-exit-btn');
     if (exitBtn) exitBtn.style.display = '';
     // Not calling switchTab('admin') here — it reads window.event.currentTarget
@@ -13708,15 +13712,24 @@ async function clearAllCriticalAlerts(ev) {
 }
 let _criticalBannerHideTimer = null;
 function renderCriticalAlerts() {
-  const cases = getCriticalPositiveCases();
   const bellDot = document.getElementById('notif-bell-dot');
   const bellBtn = document.getElementById('notif-bell-btn');
+  const banner = document.getElementById('critical-alert-banner');
+  // إشعارات الحالات الحرجة (الجرس + البانر) مُلغاة كليًا بجلسة عفيف
+  // المقيَّدة، بناءً على طلب صريح — عفيف ما يحتاجها، وتلغي أي احتمال
+  // تراكب مرتبط بيها.
+  if (afifRestrictedMode) {
+    if (bellBtn) bellBtn.classList.remove('has-critical');
+    if (bellDot) bellDot.style.display = 'none';
+    if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
+    return;
+  }
+  const cases = getCriticalPositiveCases();
   if (bellBtn) bellBtn.classList.toggle('has-critical', cases.length > 0);
   if (bellDot) {
     bellDot.style.display = cases.length > 0 ? 'flex' : 'none';
     bellDot.textContent = cases.length > 9 ? '9+' : String(cases.length);
   }
-  const banner = document.getElementById('critical-alert-banner');
   if (!banner) return;
   if (_criticalBannerHideTimer) { clearTimeout(_criticalBannerHideTimer); _criticalBannerHideTimer = null; }
   if (cases.length === 0) { banner.style.display = 'none'; banner.innerHTML = ''; return; }
