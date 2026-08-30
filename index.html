@@ -3308,7 +3308,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.7.1</span>
+  <span id="app-version">الإصدار 8.7.2</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6062,28 +6062,21 @@ function printHub5ReportSet() {
   const hubHospital = document.getElementById('printhub-hospital')?.value || 'all';
 
   // ─── حارس أمان ضد "العالقة" (fail-safe) ────────────────────────────
-  // كل الخطوات الخمس تشتغل داخل سلسلة setTimeout متداخلة، وكانت خطوات
-  // منها بدون try/catch. أي خطأ غير متوقَّع بمنتصف السلسلة (عنصر مو
-  // موجود بعد، بيانات ناقصة، فرق تايمنج بمتصفح آيفون) كان يوقف التنفيذ
-  // بصمت قبل الوصول لـrestoreAndFinish() — تارك شاشة "جاري تجهيز
-  // التقارير..." (z-index:99999، أعلى من كل عنصر بالتطبيق حتى شاشة
-  // البوابة) ظاهرة على الشاشة بشكل دائم، وتبان كـ"تراكب" غريب بأي
-  // مكان يروح له المستخدم بعدها لحد ما يسوي تحديث كامل للصفحة. مؤكَّد
-  // كسبب جذري حقيقي بعد فحص الكود مباشرة (راجع الرد بالمحادثة).
-  // الحل: (1) مؤقّت أمان يجبر إخفاء الشاشة عد أي حال بعد 12 ثانية كحد
-  // أقصى، (2) try/catch حول كل خطوة عشان لو صارت أي مشكلة نوقف بشكل
-  // نظيف (نخفي الشاشة، ننبّه المستخدم، نرجعه لصفحة التقارير) بدل ما
-  // نضل عالقين بمنتصف السلسلة بصمت.
+  // أي خطأ غير متوقَّع بمنتصف السلسلة (عنصر مو موجود بعد، بيانات
+  // ناقصة) كان يوقف التنفيذ بصمت قبل الوصول لـrestoreAndFinish() —
+  // تارك شاشة "جاري تجهيز التقارير..." (z-index:99999، أعلى من كل
+  // عنصر بالتطبيق) ظاهرة على الشاشة بشكل دائم، تبان كـ"تراكب" غريب بأي
+  // مكان يروح له المستخدم بعدها. مؤكَّد كسبب جذري حقيقي بفحص الكود.
   let ph5Finished = false;
   const ph5FailSafeTimer = setTimeout(() => {
     if (ph5Finished) return;
-    console.error('printHub5ReportSet: fail-safe triggered — chain did not finish within 12s, forcing overlay hidden.');
+    console.error('printHub5ReportSet: fail-safe triggered — did not finish within 12s, forcing overlay hidden.');
     if (overlay) overlay.style.display = 'none';
     showAlertModal(t('printHubNoContentMsg'));
     switchAdminPage('printhub');
   }, 12000);
   const ph5Bail = (step, e) => {
-    console.error(`printHub5ReportSet ${step} failed — aborting chain safely`, e);
+    console.error(`printHub5ReportSet ${step} failed — aborting safely`, e);
     ph5Finished = true;
     clearTimeout(ph5FailSafeTimer);
     if (overlay) overlay.style.display = 'none';
@@ -6125,31 +6118,42 @@ function printHub5ReportSet() {
         setTimeout(() => { document.title = originalTitle; }, 4000);
   };
 
-  // Step 1: تقرير الأداء — sync dates + hospital scope, generate, then capture #report-output.
-  const hubFrom = document.getElementById('printhub-from')?.value || '';
-  const hubTo = document.getElementById('printhub-to')?.value || '';
-  switchAdminPage('report');
-  const reportFromEl = document.getElementById('reportDateFrom');
-  const reportToEl = document.getElementById('reportDateTo');
-  const reportPeriodEl = document.getElementById('reportPeriod');
-  const reportScopeEl = document.getElementById('reportExcludedScopeSelect');
-  try { buildReportExcludedScopeOptions(); } catch (e) { console.error('buildReportExcludedScopeOptions failed', e); }
-  if (reportFromEl) reportFromEl.value = hubFrom;
-  if (reportToEl) reportToEl.value = hubTo;
-  if (reportPeriodEl) reportPeriodEl.value = 'custom';
-  if (reportScopeEl) {
-    if (hubHospital === 'all') reportScopeEl.value = '__all__';
-    else if ([...reportScopeEl.options].some(o => o.value === hubHospital)) reportScopeEl.value = hubHospital;
-  }
+  // ─── تنفيذ متزامن بالكامل (بدون أي setTimeout بين الخطوات) ─────────
+  // كانت السلسلة سابقًا مقسَّمة على 5 خطوات بفواصل setTimeout(300ms)،
+  // يعني window.print() يوصل بعد حوالي 1.5 ثانية من ضغطة الزر —
+  // Safari (خصوصًا بـiOS) ما يعتبر هذا "طباعة بأمر المستخدم" المباشر
+  // بعد هالقدر من التأخير غير المتزامن، ويحظرها برسالة "تم منع هذا
+  // الموقع من الطباعة تلقائيًا" (خصوصًا عند إعادة المحاولة). كل الدوال
+  // المستخدمة هنا (generateReport وغيرها) متزامنة أصلًا (function
+  // عادية، مو async) — فالتحويل لتنفيذ متزامن كامل آمن ولا يغيّر أي
+  // منطق، بس يخلي window.print() بنفس اللحظة المتزامنة لضغطة الزر
+  // تمامًا مثل بقية أزرار الطباعة الفردية بالتطبيق (التي تشتغل صح).
   try {
-    generateReport();
-    if (typeof generateDetailedReport === 'function') generateDetailedReport();
-  } catch (e) { console.error('printHub5ReportSet step1 (generateReport/generateDetailedReport) failed', e); }
-  if (typeof lastReportRows !== 'undefined' && lastReportRows.length === 0) {
-    console.warn('printHub5ReportSet: lastReportRows is empty after generateReport() — the performance-report section will be blank. Check that hospital files/targets exist for the selected dates.');
-  }
-  setTimeout(() => {
-   try {
+    // Step 1: تقرير الأداء — sync dates + hospital scope, generate, then capture #report-output.
+    const hubFrom = document.getElementById('printhub-from')?.value || '';
+    const hubTo = document.getElementById('printhub-to')?.value || '';
+    switchAdminPage('report');
+    const reportFromEl = document.getElementById('reportDateFrom');
+    const reportToEl = document.getElementById('reportDateTo');
+    const reportPeriodEl = document.getElementById('reportPeriod');
+    const reportScopeEl = document.getElementById('reportExcludedScopeSelect');
+    try { buildReportExcludedScopeOptions(); } catch (e) { console.error('buildReportExcludedScopeOptions failed', e); }
+    if (reportFromEl) reportFromEl.value = hubFrom;
+    if (reportToEl) reportToEl.value = hubTo;
+    if (reportPeriodEl) reportPeriodEl.value = 'custom';
+    if (reportScopeEl) {
+      if (hubHospital === 'all') reportScopeEl.value = '__all__';
+      else if ([...reportScopeEl.options].some(o => o.value === hubHospital)) reportScopeEl.value = hubHospital;
+    }
+    try {
+      generateReport();
+      if (typeof generateDetailedReport === 'function') generateDetailedReport();
+    } catch (e) { console.error('printHub5ReportSet step1 (generateReport/generateDetailedReport) failed', e); }
+    if (typeof lastReportRows !== 'undefined' && lastReportRows.length === 0) {
+      console.warn('printHub5ReportSet: lastReportRows is empty after generateReport() — the performance-report section will be blank. Check that hospital files/targets exist for the selected dates.');
+    }
+    document.body.offsetHeight; // يجبر تحديث التخطيط فورًا بدل انتظار setTimeout
+
     const reportOutput = document.getElementById('report-output');
     // Respect the hub's hospital scope: hide rows for other hospitals
     // before capturing — generateReport() always builds a table with
@@ -6202,62 +6206,48 @@ function printHub5ReportSet() {
 
     // Step 2: السجلات المستبعدة — build (skipPrint=true), capture shared container.
     try { printReportExcludedRows(true); } catch (e) { console.error('printHub5ReportSet step2 (excluded rows) failed', e); }
-    setTimeout(() => {
-     try {
-      const excludedEl = document.getElementById('report-excluded-print-only');
-      if (excludedEl && excludedEl.innerHTML.trim()) {
-        sections.push(excludedEl.innerHTML);
-      } else {
-        console.warn('printHub5ReportSet: excluded-records section came back empty — check for an alert modal (e.g. "errPickReportPeriod" or "errNoHospitalWithFileOrTarget") that may have caused an early return inside printReportExcludedRows().');
-      }
+    const excludedEl = document.getElementById('report-excluded-print-only');
+    if (excludedEl && excludedEl.innerHTML.trim()) {
+      sections.push(excludedEl.innerHTML);
+    } else {
+      console.warn('printHub5ReportSet: excluded-records section came back empty — check for an alert modal (e.g. "errPickReportPeriod" or "errNoHospitalWithFileOrTarget") that may have caused an early return inside printReportExcludedRows().');
+    }
 
-      // Step 3: تقارير الأخطاء — same shared container, overwrites step 2's content.
-      try { printDataEntryErrorsReport(true); } catch (e) { console.error('printHub5ReportSet step3 (data errors) failed', e); }
-      setTimeout(() => {
-       try {
-        const errorsEl = document.getElementById('report-excluded-print-only');
-        if (errorsEl && errorsEl.innerHTML.trim()) sections.push(errorsEl.innerHTML);
+    // Step 3: تقارير الأخطاء — same shared container, overwrites step 2's content.
+    try { printDataEntryErrorsReport(true); } catch (e) { console.error('printHub5ReportSet step3 (data errors) failed', e); }
+    const errorsEl = document.getElementById('report-excluded-print-only');
+    if (errorsEl && errorsEl.innerHTML.trim()) sections.push(errorsEl.innerHTML);
 
-        // Step 2b: الحالات المكررة — own dedicated container.
-        try { printDuplicateCasesReport(true); } catch (e) { console.error('printHub5ReportSet step2b (duplicate cases) failed', e); }
-        const dupEl = document.getElementById('duplicate-cases-print-only');
-        if (dupEl && dupEl.innerHTML.trim()) sections.push(dupEl.innerHTML);
+    // Step 2b: الحالات المكررة — own dedicated container.
+    try { printDuplicateCasesReport(true); } catch (e) { console.error('printHub5ReportSet step2b (duplicate cases) failed', e); }
+    const dupEl = document.getElementById('duplicate-cases-print-only');
+    if (dupEl && dupEl.innerHTML.trim()) sections.push(dupEl.innerHTML);
 
-        // Step 4 & 5: switch to سجل الحالات page — لوحة المؤشرات + الحالات غير المكتملة.
-        switchAdminPage('positive');
-        // getPositiveLogPeriodFilter()/showPositiveLogPeriodSummaryModal()
-        // read positive-log-filter-from/to specifically — NOT the same
-        // fields as printhub-from/to — so these must be explicitly synced
-        // here, or the dashboard silently hides itself whenever these
-        // fields happen to be empty (e.g. a fresh session that never
-        // manually visited this page before).
-        const posFromEl = document.getElementById('positive-log-filter-from');
-        const posToEl = document.getElementById('positive-log-filter-to');
-        if (posFromEl) posFromEl.value = hubFrom;
-        if (posToEl) posToEl.value = hubTo;
-        try { showPositiveLogPeriodSummaryModal(hubHospital); } catch (e) { console.error('printHub5ReportSet step4 (positive dashboard) failed', e); }
-        setTimeout(() => {
-         try {
-          const dashboardEl = document.getElementById('positive-dashboard-card');
-          if (dashboardEl && dashboardEl.style.display !== 'none' && dashboardEl.innerHTML.trim()) {
-            sections.push(dashboardEl.innerHTML);
-          }
-          try { printOverdueCasesReport(true, hubHospital); } catch (e) { console.error('printHub5ReportSet step5 (overdue cases) failed', e); }
-          setTimeout(() => {
-           try {
-            const overdueEl = document.getElementById('overdue-cases-print-only');
-            if (overdueEl && overdueEl.innerHTML.trim()) sections.push(overdueEl.innerHTML);
-            restoreAndFinish();
-           } catch (e) { ph5Bail('step5-finish', e); }
-          }, 300);
-         } catch (e) { ph5Bail('step4-5', e); }
-        }, 300);
-       } catch (e) { ph5Bail('step2b-3', e); }
-      }, 300);
-     } catch (e) { ph5Bail('step2', e); }
-    }, 300);
-   } catch (e) { ph5Bail('step1', e); }
-  }, 300);
+    // Step 4 & 5: switch to سجل الحالات page — لوحة المؤشرات + الحالات غير المكتملة.
+    switchAdminPage('positive');
+    // getPositiveLogPeriodFilter()/showPositiveLogPeriodSummaryModal()
+    // read positive-log-filter-from/to specifically — NOT the same
+    // fields as printhub-from/to — so these must be explicitly synced
+    // here, or the dashboard silently hides itself whenever these
+    // fields happen to be empty (e.g. a fresh session that never
+    // manually visited this page before).
+    const posFromEl = document.getElementById('positive-log-filter-from');
+    const posToEl = document.getElementById('positive-log-filter-to');
+    if (posFromEl) posFromEl.value = hubFrom;
+    if (posToEl) posToEl.value = hubTo;
+    try { showPositiveLogPeriodSummaryModal(hubHospital); } catch (e) { console.error('printHub5ReportSet step4 (positive dashboard) failed', e); }
+    document.body.offsetHeight;
+
+    const dashboardEl = document.getElementById('positive-dashboard-card');
+    if (dashboardEl && dashboardEl.style.display !== 'none' && dashboardEl.innerHTML.trim()) {
+      sections.push(dashboardEl.innerHTML);
+    }
+    try { printOverdueCasesReport(true, hubHospital); } catch (e) { console.error('printHub5ReportSet step5 (overdue cases) failed', e); }
+    const overdueEl = document.getElementById('overdue-cases-print-only');
+    if (overdueEl && overdueEl.innerHTML.trim()) sections.push(overdueEl.innerHTML);
+
+    restoreAndFinish();
+  } catch (e) { ph5Bail('unified-chain', e); }
 }
 function printHubAllPositive() {
   if (currentModule === 'colon') { try { reconcileUnmatchedColonCases(); } catch (e) { console.error('reconcile before print failed', e); } }
