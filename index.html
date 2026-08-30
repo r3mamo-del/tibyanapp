@@ -3305,7 +3305,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.1.1-تشخيص</span>
+  <span id="app-version">الإصدار 8.2.0-تشخيص</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -11931,7 +11931,12 @@ async function autoRepairAuditFilesOnLoad() {
     + (r.resultFixCount > 0 ? ' ' + t('auditRepairResultsFixed').replace('{n}', r.resultFixCount) : '')
     + (r.resultClearedCount > 0 ? ' ' + t('auditRepairResultsCleared').replace('{n}', r.resultClearedCount) : '')
     + (r.deletedCount > 0 ? ' ' + t('auditRepairDeleted').replace('{n}', r.deletedCount) : '')).join('<br>');
-  showInfoModal(t('autoRepairTitle'), lines, 'success');
+  // تأخير بسيط (نصف ثانية) قبل عرض هالنافذة تحديدًا — تظهر تلقائيًا فور
+  // بدء التطبيق، أحيانًا قبل ما تخلص باقي الصفحة (بانر الترحيب خصوصًا)
+  // رسمها بالكامل، وهذا التوقيت بالذات يزيد احتمال تصادم رسم بمتصفح
+  // Safari iOS (مؤكَّد كحالة واقعية حقيقية). الانتظار يضمن استقرار باقي
+  // الصفحة أول.
+  setTimeout(() => { showInfoModal(t('autoRepairTitle'), lines, 'success'); }, 500);
 }
 
 // Masked password confirmation modal — returns a Promise that resolves with
@@ -20699,6 +20704,14 @@ function showInfoModal(title, bodyHtml, tone) {
   const overlay = document.getElementById('info-modal-overlay');
   overlay.style.display = 'flex';
   overlay.classList.add('open');
+  // إجبار إعادة رسم/تركيب بصري فوري — قيد رسم معروف بمتصفح Safari iOS
+  // تحديدًا لعناصر position:fixed بخلفية شبه شفافة، يخلي محتوى الصفحة
+  // تحتها "يبين من خلالها" جزئيًا بدل ما يتغطى بالكامل، مؤكَّد كحالة
+  // واقعية حقيقية (فيديو من آيفون يوضّح تراكب واضح بين هالنافذة
+  // وبانر الترحيب تحتها). نفس الحيلة المستخدمة بتبديل اللوحات الرئيسية.
+  document.body.offsetHeight;
+  overlay.style.opacity = '0.999';
+  requestAnimationFrame(() => { overlay.style.opacity = ''; });
 }
 // Custom, branded replacement for the browser's native showAlertModal() — same
 // "نظام رقيب" styling as every other popup, instead of a generic
