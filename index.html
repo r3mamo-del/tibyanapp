@@ -3319,7 +3319,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.2.0</span>
+  <span id="app-version">الإصدار 8.3.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -11950,7 +11950,12 @@ async function autoRepairAuditFilesOnLoad() {
   // رسمها بالكامل، وهذا التوقيت بالذات يزيد احتمال تصادم رسم بمتصفح
   // Safari iOS (مؤكَّد كحالة واقعية حقيقية). الانتظار يضمن استقرار باقي
   // الصفحة أول.
-  setTimeout(() => { showInfoModal(t('autoRepairTitle'), lines, 'success'); }, 500);
+  // تأخير أطول بكثير (كان نص ثانية بس) — مؤكَّد كحالة واقعية حقيقية إن
+  // نص الثانية ما كانت كافية على بعض الأجهزة (فيديوهات متعددة توضّح
+  // تراكب واضح بين هالنافذة وبانر الترحيب، حتى بعد إصلاحات CSS متعددة).
+  // ثانيتين ونصف تعطي المتصفح وقت أكبر بكثير لينهي أي رسم أولي معلّق
+  // للصفحة كاملة قبل ما تظهر أي نافذة فوقها.
+  setTimeout(() => { showInfoModal(t('autoRepairTitle'), lines, 'success'); }, 2500);
 }
 
 // Masked password confirmation modal — returns a Promise that resolves with
