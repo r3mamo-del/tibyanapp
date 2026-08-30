@@ -3308,7 +3308,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.7.0</span>
+  <span id="app-version">الإصدار 8.7.1</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6061,7 +6061,39 @@ function printHub5ReportSet() {
   const sections = [];
   const hubHospital = document.getElementById('printhub-hospital')?.value || 'all';
 
+  // ─── حارس أمان ضد "العالقة" (fail-safe) ────────────────────────────
+  // كل الخطوات الخمس تشتغل داخل سلسلة setTimeout متداخلة، وكانت خطوات
+  // منها بدون try/catch. أي خطأ غير متوقَّع بمنتصف السلسلة (عنصر مو
+  // موجود بعد، بيانات ناقصة، فرق تايمنج بمتصفح آيفون) كان يوقف التنفيذ
+  // بصمت قبل الوصول لـrestoreAndFinish() — تارك شاشة "جاري تجهيز
+  // التقارير..." (z-index:99999، أعلى من كل عنصر بالتطبيق حتى شاشة
+  // البوابة) ظاهرة على الشاشة بشكل دائم، وتبان كـ"تراكب" غريب بأي
+  // مكان يروح له المستخدم بعدها لحد ما يسوي تحديث كامل للصفحة. مؤكَّد
+  // كسبب جذري حقيقي بعد فحص الكود مباشرة (راجع الرد بالمحادثة).
+  // الحل: (1) مؤقّت أمان يجبر إخفاء الشاشة عد أي حال بعد 12 ثانية كحد
+  // أقصى، (2) try/catch حول كل خطوة عشان لو صارت أي مشكلة نوقف بشكل
+  // نظيف (نخفي الشاشة، ننبّه المستخدم، نرجعه لصفحة التقارير) بدل ما
+  // نضل عالقين بمنتصف السلسلة بصمت.
+  let ph5Finished = false;
+  const ph5FailSafeTimer = setTimeout(() => {
+    if (ph5Finished) return;
+    console.error('printHub5ReportSet: fail-safe triggered — chain did not finish within 12s, forcing overlay hidden.');
+    if (overlay) overlay.style.display = 'none';
+    showAlertModal(t('printHubNoContentMsg'));
+    switchAdminPage('printhub');
+  }, 12000);
+  const ph5Bail = (step, e) => {
+    console.error(`printHub5ReportSet ${step} failed — aborting chain safely`, e);
+    ph5Finished = true;
+    clearTimeout(ph5FailSafeTimer);
+    if (overlay) overlay.style.display = 'none';
+    showAlertModal(t('printHubNoContentMsg'));
+    switchAdminPage('printhub');
+  };
+
   const restoreAndFinish = () => {
+    ph5Finished = true;
+    clearTimeout(ph5FailSafeTimer);
     const container = document.getElementById('printhub-combined-output');
     container.innerHTML = sections.map((html, idx) => `<div style="page-break-before:always; padding-top:${idx === 0 ? '0' : '10px'}">${html}</div>`).join('');
     // Strip the leading page-break on the very first section so it
@@ -6117,6 +6149,7 @@ function printHub5ReportSet() {
     console.warn('printHub5ReportSet: lastReportRows is empty after generateReport() — the performance-report section will be blank. Check that hospital files/targets exist for the selected dates.');
   }
   setTimeout(() => {
+   try {
     const reportOutput = document.getElementById('report-output');
     // Respect the hub's hospital scope: hide rows for other hospitals
     // before capturing — generateReport() always builds a table with
@@ -6130,7 +6163,7 @@ function printHub5ReportSet() {
       // selected hospital at all — otherwise the zone's own header/
       // branding stays visible with nothing but empty space under it.
       reportOutput.querySelectorAll('.zone-card[data-hospitals]').forEach(zc => {
-        const hospitals = zc.getAttribute('data-hospitals').split(',');
+        const hospitals = (zc.getAttribute('data-hospitals') || '').split(',');
         if (!hospitals.includes(hubHospital)) zc.style.display = 'none';
       });
       // The totals row and the unified achievement box both always show
@@ -6170,6 +6203,7 @@ function printHub5ReportSet() {
     // Step 2: السجلات المستبعدة — build (skipPrint=true), capture shared container.
     try { printReportExcludedRows(true); } catch (e) { console.error('printHub5ReportSet step2 (excluded rows) failed', e); }
     setTimeout(() => {
+     try {
       const excludedEl = document.getElementById('report-excluded-print-only');
       if (excludedEl && excludedEl.innerHTML.trim()) {
         sections.push(excludedEl.innerHTML);
@@ -6180,6 +6214,7 @@ function printHub5ReportSet() {
       // Step 3: تقارير الأخطاء — same shared container, overwrites step 2's content.
       try { printDataEntryErrorsReport(true); } catch (e) { console.error('printHub5ReportSet step3 (data errors) failed', e); }
       setTimeout(() => {
+       try {
         const errorsEl = document.getElementById('report-excluded-print-only');
         if (errorsEl && errorsEl.innerHTML.trim()) sections.push(errorsEl.innerHTML);
 
@@ -6200,21 +6235,28 @@ function printHub5ReportSet() {
         const posToEl = document.getElementById('positive-log-filter-to');
         if (posFromEl) posFromEl.value = hubFrom;
         if (posToEl) posToEl.value = hubTo;
-        showPositiveLogPeriodSummaryModal(hubHospital);
+        try { showPositiveLogPeriodSummaryModal(hubHospital); } catch (e) { console.error('printHub5ReportSet step4 (positive dashboard) failed', e); }
         setTimeout(() => {
+         try {
           const dashboardEl = document.getElementById('positive-dashboard-card');
           if (dashboardEl && dashboardEl.style.display !== 'none' && dashboardEl.innerHTML.trim()) {
             sections.push(dashboardEl.innerHTML);
           }
           try { printOverdueCasesReport(true, hubHospital); } catch (e) { console.error('printHub5ReportSet step5 (overdue cases) failed', e); }
           setTimeout(() => {
+           try {
             const overdueEl = document.getElementById('overdue-cases-print-only');
             if (overdueEl && overdueEl.innerHTML.trim()) sections.push(overdueEl.innerHTML);
             restoreAndFinish();
+           } catch (e) { ph5Bail('step5-finish', e); }
           }, 300);
+         } catch (e) { ph5Bail('step4-5', e); }
         }, 300);
+       } catch (e) { ph5Bail('step2b-3', e); }
       }, 300);
+     } catch (e) { ph5Bail('step2', e); }
     }, 300);
+   } catch (e) { ph5Bail('step1', e); }
   }, 300);
 }
 function printHubAllPositive() {
