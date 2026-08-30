@@ -3313,7 +3313,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.7.8</span>
+  <span id="app-version">الإصدار 8.7.9</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6374,30 +6374,26 @@ function printHubTrigger(targetPage, printFn) {
   }, 400);
 }
 // ─── إجبار إعادة رسم/تركيب بصري كامل للصفحة ─────────────────────────────
-// نفس الحيلة المستخدمة سابقًا محليًا بالنوافذ المنبثقة (showInfoModal
-// وغيرها) — قيد رسم معروف بمتصفح Safari (نفس عائلة WebKit بـiOS/
-// iPadOS 26): بعد عمليات تنقّل رئيسية (تبديل تبويب، تبديل وحدة، تبديل
-// صفحة إدارية)، الشاشة أحيانًا "تنقسم" لنصفين — نص قديم عالق من رسم
-// سابق لم يُمسح، ونص جديد فعلي. مؤكَّد كحالة واقعية حقيقية (بلاغ مباشر
-// من مستخدم آيباد iPadOS 26).
-// تأكيد إضافي حاسم: تدوير الشاشة (portrait↔landscape) يصلح المشكلة
-// فورًا — لأنه يجبر المتصفح يعيد حساب تخطيط حقيقي كامل. نبضة الشفافية
-// وحدها (المستخدمة سابقًا) ما كانت قوية بالقدر الكافي لتقليد نفس
-// التأثير. نبضة التمرير (scroll nudge) هي الحيلة الموثّقة تحديدًا لهذا
-// النوع من أخطاء "الرسم المتجمّد" بـWebKit — تجبر محرك الرسم يعيد بناء
-// طبقات العرض (compositor layers) بالكامل، بنفس الآلية اللي يفعّلها
-// تغيير اتجاه الشاشة تلقائيًا. نطبّقها هنا مع نبضة الشفافية معًا.
+// قيد رسم معروف بمتصفح Safari (نفس عائلة WebKit بـiOS/iPadOS 26): بعد
+// عمليات تنقّل رئيسية، الشاشة أحيانًا "تنقسم" لنصفين — نص قديم عالق من
+// رسم سابق لم يُمسح، ونص جديد فعلي. مؤكَّد كحالة واقعية حقيقية (بلاغ
+// مباشر من مستخدم آيباد iPadOS 26)، ومؤكَّد إن تدوير الشاشة يصلحها
+// فورًا (لأنه يجبر إعادة حساب تخطيط حقيقي كامل).
+// جُرِّبت حيلتين أخف (نبضة شفافية، ثم نبضة تمرير) ولا وحدة منهم كانت
+// كافية — يبان إن المشكلة مرتبطة تحديدًا بعنصري header و#module-switcher
+// (نفس العنصرين اللي فيهم position:sticky، الموثّقين سابقًا كمصدر هذا
+// القيد). الحل الأقوى: نفس الأسلوب اللي نجح فعليًا مع شاشة البوابة
+// سابقًا — إزالة العنصر من شجرة DOM كليًا ثم إعادة إدراجه فورًا، بدل
+// مجرد تغيير خاصية بصرية عليه. هذا يجبر WebKit يتعامل معه كعنصر جديد
+// تمامًا يحتاج رسم من الصفر، بدل الاعتماد على أي تحديث جزئي قد يفشل.
 function forceFullRepaint() {
-  document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا
-  document.body.style.opacity = '0.999';
-  requestAnimationFrame(() => { document.body.style.opacity = ''; });
-  // نبضة تمرير بمقدار بكسل واحد ثم الرجوع — تجبر WebKit يعيد بناء
-  // طبقات الرسم بالكامل. captureScrollY يحفظ الموضع الأصلي عشان لا
-  // نغيّر مكان تمرير المستخدم الفعلي.
-  const scrollX = window.scrollX, scrollY = window.scrollY;
-  window.scrollTo(scrollX, scrollY + 1);
-  requestAnimationFrame(() => {
-    window.scrollTo(scrollX, scrollY);
+  ['header', '#module-switcher'].forEach(sel => {
+    const el = document.querySelector(sel);
+    if (!el || !el.parentNode) return;
+    const parent = el.parentNode;
+    const next = el.nextSibling;
+    parent.removeChild(el);
+    parent.insertBefore(el, next);
   });
 }
 function switchAdminPage(name) {
