@@ -208,7 +208,16 @@
   /* ─── Header ─── */
   header {
     background: var(--surface-glass);
-    backdrop-filter: blur(8px);
+    /* backdrop-filter محذوف عمدًا (كان blur(8px)) — قيد رسم موثّق بمتصفح
+       Safari (نفس عائلة WebKit بـiOS/iPadOS 26): عنصر sticky بخاصية
+       backdrop-filter تحت أي عنصر position:fixed آخر بالصفحة (حتى لو
+       مغطّى بالكامل ظاهريًا بـz-index) بيترسم غلط أحيانًا. على آيفون كانت
+       تظهر كصندوق فاضي صغير، وعلى آيباد (شاشة أكبر) لوحظت بشكل أخطر:
+       طبقة غير مرئية تحجب لمسات الأزرار وتخلي صفحات كاملة تبان فاضية.
+       مؤكَّد كحالة واقعية حقيقية بعدة أجهزة. بما إن --surface-glass أصلًا
+       شبه معتم (٪90-92)، حذف الـblur تغيير بصري طفيف جدًا مقابل حل جذري
+       يقضي على مصدر العلة نهائيًا بغض النظر عن حجم الشاشة أو الجهاز،
+       بدل ملاحقة كل ظهور جديد لها جهاز بجهاز. */
     border-bottom: 1px solid var(--border);
     box-shadow: var(--shadow-sm);
     padding: 0 24px;
@@ -1902,7 +1911,9 @@
   /* Module switcher — breast vs colon, fully isolated data */
   #module-switcher {
     display: flex; gap: 8px; padding: 10px 16px;
-    background: var(--surface-glass); backdrop-filter: blur(6px);
+    background: var(--surface-glass);
+    /* backdrop-filter محذوف عمدًا — نفس السبب الموثّق بقاعدة header
+       أعلى (قيد رسم WebKit بـsticky + backdrop-filter، أخطر على آيباد). */
     border-bottom: 1px solid var(--border);
     position: sticky; top: 64px; z-index: 90;
   }
@@ -3302,7 +3313,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.7.4</span>
+  <span id="app-version">الإصدار 8.7.6</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -21053,6 +21064,26 @@ async function restoreReportFileCaches() {
 async function initApp() {
   document.body.classList.add('module-' + currentModule);
   updateHeaderModuleBadge();
+  // ─── تحديث GitHub التلقائي: يشتغل فورًا ومستقلًا عن باقي initApp ────
+  // كان هذا الاستدعاء بآخر الدالة، بعد سلسلة طويلة من await (تحميل
+  // كلمة المرور، البيانات، الإعدادات، سجل الحالات...). أي خطأ بأي خطوة
+  // بهالسلسلة (حتى مؤقت، شبكة بطيئة إلخ) كان يوقف تنفيذ initApp()
+  // بالكامل قبل ما يوصل لسطر التحديث التلقائي — فتضل شاشة "غير متصل"
+  // عالقة للأبد لحد ما يضغط المستخدم زر التحديث يدويًا (يشتغل صح لأنه
+  // مستقل عن هالسلسلة). مؤكَّد كحالة واقعية حقيقية (الزر اليدوي يشتغل
+  // فورًا، بس التحديث التلقائي عند فتح التطبيق ما يصير). refreshAllFromGitHub
+  // لا يعتمد على أي من نتائج السلسلة اللاحقة (reportState معرَّف مسبقًا
+  // بأعلى الملف)، فآمن تشغيله هنا فورًا بالتوازي، بدل انتظار كل شي.
+  refreshAllFromGitHub(false).catch(e => console.error('startup GitHub sync failed', e));
+  setInterval(() => { refreshAllFromGitHub(false).catch(e => console.error('periodic GitHub sync failed', e)); }, 20 * 60 * 1000);
+  let lastVisibilityRefresh = Date.now();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    const now = Date.now();
+    if (now - lastVisibilityRefresh < 2 * 60 * 1000) return; // تفادي تكرار زائد لو المستخدم يبدّل تبويبات بسرعة
+    lastVisibilityRefresh = now;
+    refreshAllFromGitHub(false).catch(e => console.error('visibility-triggered GitHub sync failed', e));
+  });
   await restoreLanguage();
   await restoreTheme();
   await restoreColorblindMode();
@@ -21109,29 +21140,6 @@ async function initApp() {
   renderReportHospitalCards();
   updateIncompleteReasonButtonsVisibility();
   if (box) box.innerHTML = '';
-
-  // تحديث تلقائي فور فتح التطبيق (بدون انتظار ضغطة يدوية)، وتكرار كل 20
-  // دقيقة طول ما التبويب مفتوح — بديل كامل عن مؤقّت Drive القديم (30
-  // دقيقة)، هذا يعتمد على GitHub فقط. Fire-and-forget (مو await) عشان
-  // ما يعطّل إقلاع التطبيق نفسه بانتظار المزامنة الكاملة.
-  refreshAllFromGitHub(false).catch(e => console.error('startup GitHub sync failed', e));
-  setInterval(() => { refreshAllFromGitHub(false).catch(e => console.error('periodic GitHub sync failed', e)); }, 20 * 60 * 1000);
-
-  // مؤكَّد كحالة واقعية حقيقية: المتصفحات تُبطئ أو توقف مؤقّتات
-  // setInterval بالتبويبات الخلفية/غير النشطة (قيد حماية بطارية معروف)،
-  // فلو التبويب فُتح وتُرك بالخلفية فترة طويلة، مؤقّت الـ20 دقيقة ما
-  // يشتغل بانتظام — البيانات المعروضة تبقى قديمة رغم إن GitHub نفسه
-  // محدَّث فعليًا. هذا يفرض تحديث فوري بمجرد ما المستخدم يرجع فعليًا
-  // للتبويب (يفتحه من جديد بعد ما كان بالخلفية)، بغض النظر عن حالة
-  // المؤقّت الدوري.
-  let lastVisibilityRefresh = Date.now();
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible') return;
-    const now = Date.now();
-    if (now - lastVisibilityRefresh < 2 * 60 * 1000) return; // تفادي تكرار زائد لو المستخدم يبدّل تبويبات بسرعة
-    lastVisibilityRefresh = now;
-    refreshAllFromGitHub(false).catch(e => console.error('visibility-triggered GitHub sync failed', e));
-  });
 }
 
 // Switches between "أورام الثدي" and "أورام القولون" — two fully separate
