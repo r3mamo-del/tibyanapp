@@ -3308,7 +3308,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.6.0</span>
+  <span id="app-version">الإصدار 8.7.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -7687,7 +7687,16 @@ async function gatewaySubmit() {
   }
   afifRestrictedMode = (choice === 'afif');
   updateWelcomeBannerText();
-  document.getElementById('gateway-screen').style.display = 'none';
+  // حذف العنصر نهائيًا من الصفحة (مو مجرد إخفائه بـdisplay:none) — قيد
+  // رسم معروف بمتصفح Safari iOS تحديدًا (وأكَّده تكرار المشكلة بمتصفح
+  // Chrome كمان، يلي يعتمد نفس محرك WebKit بنظام iOS): عناصر
+  // position:fixed كبيرة الحجم أحيانًا "تبقى ظاهرة جزئيًا" رغم
+  // display:none، مؤكَّد كحالة واقعية حقيقية (فيديوهات متعددة توضّح
+  // تراكب مستمر تحديدًا فوق البانر العلوي). الحذف الكامل من الـDOM
+  // يزيل أي احتمال تراكب لاحق نهائيًا، بخلاف display:none يلي يبقي
+  // العنصر بالصفحة (بس غير ظاهر افتراضيًا).
+  const gatewayEl = document.getElementById('gateway-screen');
+  if (gatewayEl) gatewayEl.remove();
   // الهيدر كان مخفيًا فعليًا (مو بس مغطّى بصريًا بـz-index) وقت ظهور
   // البوابة — قيد رسم معروف بمتصفح Safari iOS تحديدًا لما يكون عنصر
   // sticky بخاصية backdrop-filter تحت عنصر fixed آخر (حتى لو مغطّى
