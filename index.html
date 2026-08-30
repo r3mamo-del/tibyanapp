@@ -3313,7 +3313,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.7.6</span>
+  <span id="app-version">الإصدار 8.7.8</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6373,6 +6373,33 @@ function printHubTrigger(targetPage, printFn) {
     setTimeout(() => { switchAdminPage('printhub'); }, 1200);
   }, 400);
 }
+// ─── إجبار إعادة رسم/تركيب بصري كامل للصفحة ─────────────────────────────
+// نفس الحيلة المستخدمة سابقًا محليًا بالنوافذ المنبثقة (showInfoModal
+// وغيرها) — قيد رسم معروف بمتصفح Safari (نفس عائلة WebKit بـiOS/
+// iPadOS 26): بعد عمليات تنقّل رئيسية (تبديل تبويب، تبديل وحدة، تبديل
+// صفحة إدارية)، الشاشة أحيانًا "تنقسم" لنصفين — نص قديم عالق من رسم
+// سابق لم يُمسح، ونص جديد فعلي. مؤكَّد كحالة واقعية حقيقية (بلاغ مباشر
+// من مستخدم آيباد iPadOS 26).
+// تأكيد إضافي حاسم: تدوير الشاشة (portrait↔landscape) يصلح المشكلة
+// فورًا — لأنه يجبر المتصفح يعيد حساب تخطيط حقيقي كامل. نبضة الشفافية
+// وحدها (المستخدمة سابقًا) ما كانت قوية بالقدر الكافي لتقليد نفس
+// التأثير. نبضة التمرير (scroll nudge) هي الحيلة الموثّقة تحديدًا لهذا
+// النوع من أخطاء "الرسم المتجمّد" بـWebKit — تجبر محرك الرسم يعيد بناء
+// طبقات العرض (compositor layers) بالكامل، بنفس الآلية اللي يفعّلها
+// تغيير اتجاه الشاشة تلقائيًا. نطبّقها هنا مع نبضة الشفافية معًا.
+function forceFullRepaint() {
+  document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا
+  document.body.style.opacity = '0.999';
+  requestAnimationFrame(() => { document.body.style.opacity = ''; });
+  // نبضة تمرير بمقدار بكسل واحد ثم الرجوع — تجبر WebKit يعيد بناء
+  // طبقات الرسم بالكامل. captureScrollY يحفظ الموضع الأصلي عشان لا
+  // نغيّر مكان تمرير المستخدم الفعلي.
+  const scrollX = window.scrollX, scrollY = window.scrollY;
+  window.scrollTo(scrollX, scrollY + 1);
+  requestAnimationFrame(() => {
+    window.scrollTo(scrollX, scrollY);
+  });
+}
 function switchAdminPage(name) {
   document.getElementById('admin-page-positive').style.display = name === 'positive' ? '' : 'none';
   document.getElementById('admin-page-b0').style.display       = name === 'b0'       ? '' : 'none';
@@ -6398,6 +6425,7 @@ function switchAdminPage(name) {
   }
   if (name === 'b0') renderB0Report();
   if (name === 'printhub') populatePrintHubScopeOptions();
+  forceFullRepaint();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -7409,6 +7437,7 @@ function switchTab(name) {
   document.body.offsetHeight;
   newPanel.style.opacity = '0.999';
   requestAnimationFrame(() => { newPanel.style.opacity = ''; });
+  forceFullRepaint(); // يغطي الصفحة كاملة (هيدر، شريط الوحدة...) مو بس اللوحة الجديدة
   if (name === 'search') refreshPublicUI();
   if (name === 'admin')  refreshAdminUI();
   if (name === 'indicators') setIndicatorsPeriod(indicatorsPeriod);
@@ -7766,6 +7795,7 @@ async function gatewaySubmit() {
     if (adminTabBtn) adminTabBtn.classList.add('active');
     refreshAdminUI();
     switchAdminPage('report');
+    forceFullRepaint();
   }
 }
 // تغيير كلمة مرور أي بوابة من داخل التطبيق (بصفحة الإعدادات) — نفس
@@ -21140,6 +21170,7 @@ async function initApp() {
   renderReportHospitalCards();
   updateIncompleteReasonButtonsVisibility();
   if (box) box.innerHTML = '';
+  forceFullRepaint();
 }
 
 // Switches between "أورام الثدي" and "أورام القولون" — two fully separate
@@ -21282,6 +21313,7 @@ async function switchModule(m) {
   renderReportHospitalCards();
   loadDriveLastUpdate();
   updateLiveStatusBadge();
+  forceFullRepaint();
 }
 
 // Every previous attempt at forcing Western digits used CSS
