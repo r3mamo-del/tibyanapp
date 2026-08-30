@@ -3319,7 +3319,7 @@
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.3.0</span>
+  <span id="app-version">الإصدار 8.4.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -11945,17 +11945,14 @@ async function autoRepairAuditFilesOnLoad() {
     + (r.resultFixCount > 0 ? ' ' + t('auditRepairResultsFixed').replace('{n}', r.resultFixCount) : '')
     + (r.resultClearedCount > 0 ? ' ' + t('auditRepairResultsCleared').replace('{n}', r.resultClearedCount) : '')
     + (r.deletedCount > 0 ? ' ' + t('auditRepairDeleted').replace('{n}', r.deletedCount) : '')).join('<br>');
-  // تأخير بسيط (نصف ثانية) قبل عرض هالنافذة تحديدًا — تظهر تلقائيًا فور
-  // بدء التطبيق، أحيانًا قبل ما تخلص باقي الصفحة (بانر الترحيب خصوصًا)
-  // رسمها بالكامل، وهذا التوقيت بالذات يزيد احتمال تصادم رسم بمتصفح
-  // Safari iOS (مؤكَّد كحالة واقعية حقيقية). الانتظار يضمن استقرار باقي
-  // الصفحة أول.
-  // تأخير أطول بكثير (كان نص ثانية بس) — مؤكَّد كحالة واقعية حقيقية إن
-  // نص الثانية ما كانت كافية على بعض الأجهزة (فيديوهات متعددة توضّح
-  // تراكب واضح بين هالنافذة وبانر الترحيب، حتى بعد إصلاحات CSS متعددة).
-  // ثانيتين ونصف تعطي المتصفح وقت أكبر بكثير لينهي أي رسم أولي معلّق
-  // للصفحة كاملة قبل ما تظهر أي نافذة فوقها.
-  setTimeout(() => { showInfoModal(t('autoRepairTitle'), lines, 'success'); }, 2500);
+  // النافذة المنبثقة أُزيلت نهائيًا — بعد عدة محاولات إصلاح CSS/توقيت
+  // فشلت كلها بحل تراكب واضح ومستمر بينها وبين بانر الترحيب على بعض
+  // الأجهزة (مؤكَّد كحالة واقعية حقيقية بفيديوهات متعددة، حتى بعد تأخير
+  // العرض لثانيتين ونصف). الإصلاح التلقائي نفسه (تصحيح التواريخ/الأعمار)
+  // يستمر يشتغل بصمت بالخلفية كالمعتاد — بس بدون أي نافذة تظهر فوق
+  // الشاشة، يلغي احتمال التراكب من جذوره. التفاصيل تبقى متاحة بسجلّ
+  // المتصفح (console) لمن يحتاجها.
+  console.info('[تصحيح تلقائي لملف التدقيق]', lines.replace(/<br>/g, ' | '));
 }
 
 // Masked password confirmation modal — returns a Promise that resolves with
