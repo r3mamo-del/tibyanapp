@@ -3316,7 +3316,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.8.5</span>
+  <span id="app-version">الإصدار 8.8.7</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -18063,6 +18063,16 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum)
 
     if (consentColIdx >= 0 && isRefusedValue(r[consentColIdx])) refusedCount++;
 
+    // ملاحظة "تاريخ غير مكتمل" (dateIncomplete) — كانت تُضاف مباشرة لـ
+    // dataErrorNotes أثناء تحليل التاريخ، قبل ما يتأكد نهائيًا هل الصف
+    // فعلًا داخل الفترة المحددة أو لا. لو الصف طلع لاحقًا خارج الفترة
+    // (تاريخ قديم مثلًا) واستُبعد بشكل طبيعي، الملاحظة المبكرة كانت
+    // تضل بالمصفوفة بدون ما تنسحب — فتظهر بتقرير "بيانات تحتاج تصحيح"
+    // رغم إن الصف نفسه مستبعد أصلًا لكونه خارج الفترة. مؤكَّد كحالة
+    // واقعية حقيقية (بلاغ مباشر، مستشفى حريملاء). الحل: تأجيل الإضافة
+    // الفعلية لـdataErrorNotes لحد ما يثبت إن الصف داخل الفترة فعلًا.
+    let pendingDateIncompleteNote = null;
+
     // "Date of Lab result" completeness check (colon module) — both this
     // and the primary date are official, equally-required data points;
     // this cell being blank is its own data-entry issue, independent of
@@ -18140,7 +18150,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum)
       let usedIdx = st.dateIdx;
       let usedPrimaryDirectly = !!dt; // a clean primary-column read, before any correction/fallback — tracked so the swap check below can skip it
       if (dt && parseCellDate.lastWasIncomplete) {
-        dataErrorNotes.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'dateIncomplete', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
+        pendingDateIncompleteNote = { hospital: name, num, rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'dateIncomplete', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) };
       }
       // Same plausibility check/correction the positive-cases scan uses:
       // a parsed date outside [2025-01-01, today] is almost always a wrong
@@ -18172,7 +18182,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum)
         } else {
           dt = parseCellDate(rawSecondary, preferMonthFirst);
           if (dt && parseCellDate.lastWasIncomplete) {
-            dataErrorNotes.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'dateIncomplete', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
+            pendingDateIncompleteNote = { hospital: name, num, rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'dateIncomplete', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) };
           }
           if (dt && parseCellDate.lastWasAmbiguous && st.dateOrderPreference == null) {
             dt = st.secondaryDateContextResolution.resolved.has(rowIdx)
@@ -18196,7 +18206,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum)
         } else {
           dt = parseCellDate(rawTertiary, preferMonthFirst);
           if (dt && parseCellDate.lastWasIncomplete) {
-            dataErrorNotes.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'dateIncomplete', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
+            pendingDateIncompleteNote = { hospital: name, num, rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'dateIncomplete', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) };
           }
           if (dt && parseCellDate.lastWasAmbiguous && st.dateOrderPreference == null) {
             dt = st.tertiaryDateContextResolution.resolved.has(rowIdx)
@@ -18310,6 +18320,10 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum)
     // happens to be valid. Invalid-ID is its own separate data-quality
     // category (invalidIdCount), reported alongside the total rather
     // than subtracted from it first.
+    // نلتزم بملاحظة "تاريخ غير مكتمل" المؤجَّلة هنا بس — بعد التأكد
+    // الفعلي إن الصف داخل الفترة، مو وقت تحليل التاريخ المبكر (راجع
+    // التعليق ببداية الحلقة لتفاصيل السبب).
+    if (pendingDateIncompleteNote) dataErrorNotes.push(pendingDateIncompleteNote);
     rawEntryCount++;
     if (num.length !== 10) { invalidIdCount++; excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'invalidId', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) }); return; } // must match bulk-scan's rule exactly
 
@@ -21194,6 +21208,14 @@ async function initApp() {
     const versionMatch = innerVersionText.match(/[\d.]+/);
     if (gwVersionEl && versionMatch) gwVersionEl.textContent = versionMatch[0];
   } catch (e) { console.error('gateway version fill failed', e); }
+  // مستهدف التجمع (clusterTargets) لازم يكتمل تحميله قبل أي عرض أولي
+  // لسطر ملخّص شاشة البوابة — كان هذا يُحمَّل لاحقًا بمنتصف سلسلة
+  // التحميل، بينما refreshAllFromGitHub (فورًا تحت) يستدعي تحديث سطر
+  // البوابة بشكل غير متزامن أسرع منه أحيانًا (سباق توقيت بين طلبي
+  // شبكة، مو مضمون الترتيب) — فيطلع السطر بالمحقق بس بدون مستهدف مرة
+  // أولى. مؤكَّد كحالة واقعية حقيقية (لقطة شاشة مباشرة). ننتظره هنا
+  // أولًا (طلب شبكة صغير وسريع) قبل تشغيل أي شيء يعتمد عليه.
+  await loadClusterTargets();
   // ─── تحديث GitHub التلقائي: يشتغل فورًا ومستقلًا عن باقي initApp ────
   // كان هذا الاستدعاء بآخر الدالة، بعد سلسلة طويلة من await (تحميل
   // كلمة المرور، البيانات، الإعدادات، سجل الحالات...). أي خطأ بأي خطوة
@@ -21254,7 +21276,6 @@ async function initApp() {
   updateLiveStatusBadge();
   await loadDriveLastUpdate();
   await loadPositiveLog();
-  await loadClusterTargets();
   await loadB0DateRange();
   await restoreReportFileCaches();
   await restoreDateOverrides();
