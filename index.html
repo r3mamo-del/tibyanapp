@@ -3315,7 +3315,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.8.3</span>
+  <span id="app-version">الإصدار 8.8.4</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6153,7 +6153,13 @@ function printHub5ReportSet() {
     }
     try {
       generateReport();
-      if (typeof generateDetailedReport === 'function') generateDetailedReport();
+      // instant=true يتخطى حركة العدّ التدريجي (700ms) ويثبّت الأرقام
+      // فورًا — أساسي هنا لأن السطر التالي يلتقط innerHTML مباشرة بدون
+      // أي تأخير (عشان تضل الطباعة مرتبطة بضغطة المستخدم المباشرة على
+      // iPadOS/iOS)، وبدون هذا كان الالتقاط يصير ولسه الأرقام بمنتصف
+      // الحركة (قريبة من صفر)، فيطبع التقرير التفصيلي فاضي أو ناقص رغم
+      // وجود بيانات فعلية — مؤكَّد كحالة واقعية حقيقية (بلاغ مباشر).
+      if (typeof generateDetailedReport === 'function') generateDetailedReport(true);
     } catch (e) { console.error('printHub5ReportSet step1 (generateReport/generateDetailedReport) failed', e); }
     if (typeof lastReportRows !== 'undefined' && lastReportRows.length === 0) {
       console.warn('printHub5ReportSet: lastReportRows is empty after generateReport() — the performance-report section will be blank. Check that hospital files/targets exist for the selected dates.');
@@ -18649,8 +18655,25 @@ function animateDrCardNumbers(container) {
     requestAnimationFrame(step);
   });
 }
+// نسخة فورية بدون حركة عد تدريجي — لازمة لأي مسار يلتقط innerHTML
+// مباشرة بعد التوليد (زي طباعة "المجموعة كاملة" اللي تعمل بشكل متزامن
+// كامل بدون أي تأخير، عشان تحافظ على ربط الطباعة بضغطة المستخدم
+// المباشرة على iPadOS/iOS). animateDrCardNumbers تاخذ ٧٠٠ملي ثانية
+// لتصل للرقم النهائي عبر requestAnimationFrame — أي التقاط فوري
+// لـinnerHTML قبل اكتمالها يلتقط أرقام قريبة من صفر (منتصف الحركة)،
+// فتطبع التقرير التفصيلي فاضي أو بأرقام غلط رغم وجود بيانات فعلية.
+// مؤكَّد كحالة واقعية حقيقية (بلاغ مباشر). تُستدعى بدل animateDrCardNumbers
+// (مو بالإضافة لها) بأي مسار يحتاج التقاط فوري.
+function finalizeDrCardNumbersInstant(container) {
+  const nodes = (container || document).querySelectorAll('[data-count]');
+  const fmtNum = n => n.toLocaleString('en-US');
+  nodes.forEach(el => {
+    const target = parseInt(el.getAttribute('data-count'), 10) || 0;
+    el.textContent = fmtNum(target);
+  });
+}
 
-function generateDetailedReport() {
+function generateDetailedReport(instant) {
   lastReportView = 'detailed';
   const out = document.getElementById('detailed-report-output');
   out.style.display = 'block';
@@ -18754,7 +18777,7 @@ function generateDetailedReport() {
     </div>`;
 
   out.innerHTML = html;
-  animateDrCardNumbers(out);
+  if (instant) finalizeDrCardNumbersInstant(out); else animateDrCardNumbers(out);
 
   const scopeSel = document.getElementById('detailedReportPrintScope');
   if (scopeSel) {
