@@ -2035,6 +2035,16 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
           <span style="margin-right:auto; color:#E9C783; font-size:16px">←</span>
         </div>
       </button>
+      <button type="button" class="gateway-card gw-card" onclick="gatewaySelect('moc')" style="all:unset; cursor:pointer; position:relative; border-radius:18px; padding:2px; animation:gwRotateBorder 5s linear infinite">
+        <div style="background:linear-gradient(160deg,#101d3a,#0e1830); border-radius:16.5px; padding:18px 20px; display:flex; align-items:center; gap:14px">
+          <span style="font-size:28px; flex:none">🔑</span>
+          <div>
+            <div style="font-weight:800; font-size:14.5px; color:#EDEFF5" data-i18n="gatewayMocTitle">MOC-R3</div>
+            <div style="font-size:12.5px; color:#A0A8C4; font-weight:600; margin-top:2px" data-i18n="gatewayMocDesc">دخول كامل لكل صلاحيات النظام</div>
+          </div>
+          <span style="margin-right:auto; color:#E9C783; font-size:16px">←</span>
+        </div>
+      </button>
     </div>
 
     <div id="gateway-pw-box" style="display:none; background:linear-gradient(160deg,#101d3a,#0e1830); border:1px solid rgba(255,255,255,.10); border-radius:16px; padding:22px; margin-top:16px">
@@ -3316,7 +3326,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.8.8</span>
+  <span id="app-version">الإصدار 8.9.1</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -3443,6 +3453,8 @@ const I18N = {
     gatewayAfifDesc: "Restricted access — Afif hospital's data only",
     gatewayMasarTitle: "Breast & Colon Oncology Pathway",
     gatewayMasarDesc: "Full access to all system features",
+    gatewayMocTitle: "MOC-R3",
+    gatewayMocDesc: "Full access to all system features",
     gatewayPwPlaceholder: "Enter password...",
     gatewayEnterBtn: "Enter",
     gatewayBackBtn: "Back",
@@ -4301,6 +4313,8 @@ const I18N = {
     gatewayAfifDesc: "دخول مقيّد ببيانات عفيف فقط",
     gatewayMasarTitle: "مسار أورام الثدي والقولون",
     gatewayMasarDesc: "دخول كامل لكل صلاحيات النظام",
+    gatewayMocTitle: "MOC-R3",
+    gatewayMocDesc: "دخول كامل لكل صلاحيات النظام",
     gatewayPwPlaceholder: "أدخل كلمة المرور...",
     gatewayEnterBtn: "دخول",
     gatewayBackBtn: "رجوع",
@@ -7764,14 +7778,14 @@ function clearResult() {
 let gatewayPendingChoice = null;
 let afifRestrictedMode = false;
 const RESTRICTED_HOSPITAL = 'عفيف';
-const GATEWAY_PW_KEYS = { afif: 'raqeeb_gatewayPw_afif_v1', masar: 'raqeeb_gatewayPw_masar_v1' };
-const GATEWAY_PW_DEFAULTS = { afif: 'afif2024', masar: 'mamo2025' };
+const GATEWAY_PW_KEYS = { afif: 'raqeeb_gatewayPw_afif_v1', masar: 'raqeeb_gatewayPw_masar_v1', moc: 'raqeeb_gatewayPw_moc_v1' };
+const GATEWAY_PW_DEFAULTS = { afif: 'afif2024', masar: 'mamo2025', moc: 'Moc2025' };
 function gatewaySelect(choice) {
   gatewayPendingChoice = choice;
   document.getElementById('gateway-choices').style.display = 'none';
   document.getElementById('gateway-pw-box').style.display = 'block';
   document.getElementById('gateway-pw-title').textContent =
-    choice === 'afif' ? t('gatewayAfifTitle') : t('gatewayMasarTitle');
+    choice === 'afif' ? t('gatewayAfifTitle') : choice === 'moc' ? t('gatewayMocTitle') : t('gatewayMasarTitle');
   document.getElementById('gateway-pw-error').textContent = '';
   const input = document.getElementById('gatewayPwInput');
   input.value = '';
@@ -16794,12 +16808,12 @@ function toggleDriveAutoRefresh() {
   if (driveAutoRefreshTimer) { clearInterval(driveAutoRefreshTimer); driveAutoRefreshTimer = null; }
   const btn = document.getElementById('drive-auto-btn');
   if (btn) {
-    btn.textContent = 'معطَّل — استخدم زر GitHub بدلاً منه';
+    btn.textContent = 'معطَّل — استخدم زر تحديث البيانات بدلاً منه';
     btn.classList.remove('btn-primary');
     btn.classList.add('btn-ghost');
     btn.disabled = true;
   }
-  driveLog('التحديث التلقائي من Drive مُعطَّل نهائيًا — استخدم "🐙 تحديث الكل من GitHub" بدلاً منه.');
+  driveLog('التحديث التلقائي من Drive مُعطَّل نهائيًا — استخدم "🔄 تحديث الكل من البيانات" بدلاً منه.');
 }
 
 async function refreshAllFromDrive(isManual) {
@@ -17048,7 +17062,7 @@ async function refreshAllFromGitHub(isManual) {
   const originalModule = currentModule;
   let okCount = 0, failCount = 0;
   const failedHospitals = [];
-  if (statusEl) { statusEl.style.color = 'var(--muted)'; statusEl.textContent = 'جاري المزامنة من GitHub...'; }
+  if (statusEl) { statusEl.style.color = 'var(--muted)'; statusEl.textContent = 'جاري المزامنة...'; }
 
   for (const moduleKey of ['breast', 'colon']) {
     for (const hospital of REPORT_HOSPITALS_BY_MODULE[moduleKey]) {
@@ -17070,7 +17084,7 @@ async function refreshAllFromGitHub(isManual) {
   await flushFileCacheBatch();
   await saveDriveLastUpdate(currentModule);
 
-  const summary = `✅ تمّت مزامنة ${okCount} ملف من GitHub` + (failCount > 0 ? ` — فشل ${failCount}: ${failedHospitals.join('، ')}` : '');
+  const summary = `✅ تمّت مزامنة ${okCount} ملف` + (failCount > 0 ? ` — فشل ${failCount}: ${failedHospitals.join('، ')}` : '');
   if (statusEl) { statusEl.style.color = failCount > 0 ? 'var(--warn)' : 'var(--success)'; statusEl.textContent = summary; }
   if (isManual && failCount > 0) showAlertModal(summary);
 
