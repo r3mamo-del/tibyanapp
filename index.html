@@ -2058,6 +2058,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
     .gw-card:hover { transform:translateY(-2px) }
     .gw-card:hover > div { outline:1px solid rgba(233,199,131,.35) }
   </style>
+  <div style="position:absolute; bottom:14px; left:0; right:0; text-align:center; font-size:10.5px; color:rgba(160,168,196,.55); letter-spacing:.3px; z-index:1"><span data-i18n="gatewayVersionLbl">الإصدار</span> <span id="gateway-app-version" class="ltr-num"></span></div>
 </div>
 
 <!-- ═══ MODULE WATERMARK — ribbon icon reflecting the active module ═══ -->
@@ -3315,7 +3316,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.8.4</span>
+  <span id="app-version">الإصدار 8.8.5</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -3437,6 +3438,7 @@ const I18N = {
     hoursWord: 'h ago',
     gatewayTitle: "Raqeeb System",
     gatewaySubtitle: "Choose your entry point",
+    gatewayVersionLbl: "Version",
     gatewayAfifTitle: "Afif Hospital",
     gatewayAfifDesc: "Restricted access — Afif hospital's data only",
     gatewayMasarTitle: "Breast & Colon Oncology Pathway",
@@ -4294,6 +4296,7 @@ const I18N = {
     hoursWord: 'ساعة',
     gatewayTitle: "Screening 2care",
     gatewaySubtitle: "اختر نقطة الدخول",
+    gatewayVersionLbl: "الإصدار",
     gatewayAfifTitle: "مستشفى عفيف",
     gatewayAfifDesc: "دخول مقيّد ببيانات عفيف فقط",
     gatewayMasarTitle: "مسار أورام الثدي والقولون",
@@ -6531,10 +6534,12 @@ function updateGatewayMonthlySummary() {
     const y = today.getFullYear(), m = today.getMonth();
     const monthRange = { from: new Date(y, m, 1), to: new Date(y, m + 1, 0, 23, 59, 59) };
     const parts = ['breast', 'colon'].map(moduleKey => {
-      const savedTarget = (clusterTargets[moduleKey] && clusterTargets[moduleKey].monthly) || 0;
+      // احتساب حصري على مستهدف التجمع الشهري (clusterTargets) — بدون أي
+      // بديل احتياطي لمجموع مستهدفات المستشفيات، بناءً على طلب صريح.
+      // لو مستهدف التجمع مو محدَّد أصلًا، يبقى صفر بدل رقم مختلف المعنى.
+      const target = (clusterTargets[moduleKey] && clusterTargets[moduleKey].monthly) || 0;
       const achievement = computeModuleAchievement(moduleKey, monthRange, 'month');
       const achieved = achievement.totalAchieved;
-      const target = savedTarget > 0 ? savedTarget : achievement.totalTarget;
       const icon = MODULES[moduleKey].icon;
       const label = MODULES[moduleKey].label;
       return `${icon} ${label}: ${achieved}${target ? '/' + target : ''}`;
@@ -21180,6 +21185,15 @@ async function restoreReportFileCaches() {
 async function initApp() {
   document.body.classList.add('module-' + currentModule);
   updateHeaderModuleBadge();
+  // رقم الإصدار بشاشة البوابة (خارجيًا، قبل تسجيل الدخول) — يُستخرج من
+  // نفس مصدر الحقيقة الوحيد (#app-version الداخلي) بدل تكرار الرقم
+  // يدويًا بمكانين، عشان يبقيان متطابقين دائمًا تلقائيًا.
+  try {
+    const gwVersionEl = document.getElementById('gateway-app-version');
+    const innerVersionText = document.getElementById('app-version')?.textContent || '';
+    const versionMatch = innerVersionText.match(/[\d.]+/);
+    if (gwVersionEl && versionMatch) gwVersionEl.textContent = versionMatch[0];
+  } catch (e) { console.error('gateway version fill failed', e); }
   // ─── تحديث GitHub التلقائي: يشتغل فورًا ومستقلًا عن باقي initApp ────
   // كان هذا الاستدعاء بآخر الدالة، بعد سلسلة طويلة من await (تحميل
   // كلمة المرور، البيانات، الإعدادات، سجل الحالات...). أي خطأ بأي خطوة
