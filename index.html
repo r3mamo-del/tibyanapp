@@ -3166,7 +3166,6 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
             <label style="font-size:12px; color:var(--muted); display:block; margin:8px 0 3px" data-i18n="printHospitalScopeLbl">طباعة لوحة المؤشرات لـ</label>
             <select id="positive-dashboard-print-scope" class="input" style="margin-bottom:6px" onchange="showPositiveLogPeriodSummaryModal()"><option value="all" data-i18n="optAllHospitals">كل المستشفيات (مجمّع)</option></select>
             <button class="btn btn-ghost btn-full" style="margin-top:8px" onclick="printPositiveDashboard()" data-i18n="btnPrintDashboard">طباعة لوحة المؤشرات / حفظ PDF</button>
-            <button class="btn btn-ghost btn-full" style="margin-top:8px; border-color:var(--danger); color:var(--danger)" onclick="printOverdueCasesReport()" data-i18n="btnPrintOverdueCases">⏰ طباعة تقرير الحالات غير المكتملة</button>
             <button class="btn btn-ghost btn-full" style="margin-top:8px" onclick="exportOverdueCasesExcel()">⬇ تصدير الحالات غير المكتملة (Excel)</button>
             <button class="btn btn-ghost btn-full" id="btn-colon-incomplete-reasons" style="margin-top:8px; display:none" onclick="printColonIncompleteStepsChart()">📊 أسباب عدم الاكتمال حسب المستشفى (القولون)</button>
             <button class="btn btn-ghost btn-full" id="btn-breast-incomplete-reasons" style="margin-top:8px; display:none" onclick="printBreastIncompleteStepsChart()">📊 أسباب عدم الاكتمال حسب المستشفى (الثدي)</button>
@@ -3326,7 +3325,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.9.1</span>
+  <span id="app-version">الإصدار 8.9.2</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -3732,6 +3731,8 @@ const I18N = {
     errFillBothPeriods: 'Set start and end dates for both periods',
     differenceLbl: 'Difference',
     afifMammoSupervisorLbl: 'Mammography Unit Supervisor',
+    signatureApprovedLbl: 'Approved',
+    signatureForReviewLbl: 'For review only',
     newWord: 'New',
     comparedToPrevPeriod: 'vs previous period',
     // B0 page
@@ -4376,6 +4377,8 @@ const I18N = {
     errFillBothPeriods: "حدد تاريخي البداية والنهاية للفترتين",
     differenceLbl: "الفرق",
     afifMammoSupervisorLbl: "مشرف وحدة المامو",
+    signatureApprovedLbl: "معتمد",
+    signatureForReviewLbl: "للاطلاع",
     welcomeLiveStatus: "متصل بقاعدة البيانات",
     welcomeLiveStatusOffline: "غير متصل — لا توجد بيانات محمَّلة بعد، اضغط تحديث البيانات",
     newWord: "جديد",
@@ -7776,6 +7779,7 @@ function clearResult() {
 //  "masar" unlocks the full, unrestricted system exactly as before.
 // ═══════════════════════════════════════════════════════
 let gatewayPendingChoice = null;
+let gatewayLoginChoice = null; // 'afif' | 'masar' | 'moc' — يحدد نوع الدخول الفعلي (مو بس عفيف/غير عفيف)
 let afifRestrictedMode = false;
 const RESTRICTED_HOSPITAL = 'عفيف';
 const GATEWAY_PW_KEYS = { afif: 'raqeeb_gatewayPw_afif_v1', masar: 'raqeeb_gatewayPw_masar_v1', moc: 'raqeeb_gatewayPw_moc_v1' };
@@ -7815,6 +7819,7 @@ async function gatewaySubmit() {
     return;
   }
   afifRestrictedMode = (choice === 'afif');
+  gatewayLoginChoice = choice;
   updateWelcomeBannerText();
   // حذف العنصر نهائيًا من الصفحة (مو مجرد إخفائه بـdisplay:none) — قيد
   // رسم معروف بمتصفح Safari iOS تحديدًا (وأكَّده تكرار المشكلة بمتصفح
@@ -12224,6 +12229,21 @@ function buildPrintBrandHeaderHtml(title, periodText) {
       ${periodText ? `<span class="report-period-badge ltr-num">${esc(periodText)}</span>` : ''}
     </div>`;
 }
+// ─── توقيع تذييل التقارير المطبوعة ──────────────────────────────────────
+// يتحدَّد نص التوقيع حسب نوع الدخول الفعلي (gatewayLoginChoice) — بناءً
+// على طلب صريح: أي طباعة صادرة عن دخول "مسار أورام الثدي والقولون" (قائد
+// المسار، صاحب الصلاحية الكاملة) تُذيَّل بـ"معتمد"، وأي طباعة صادرة عن
+// أي دخول آخر (عفيف المقيَّد أو MOC-R3) تُذيَّل بـ"للاطلاع" بدلًا من ذلك
+// — تمييز واضح بين التقرير المعتمد رسميًا والتقرير للعلم فقط.
+function buildReportSignatureText() {
+  if (gatewayLoginChoice === 'masar') {
+    return `${t('pathwayLeadNameLabel')}: أ. حصة مشبب البقمي — ${t('signatureApprovedLbl')}`;
+  }
+  if (afifRestrictedMode) {
+    return `${t('afifMammoSupervisorLbl')}: رنيم محمد العتيبي — ${t('signatureForReviewLbl')}`;
+  }
+  return t('signatureForReviewLbl');
+}
 function buildPrintBrandFooterHtml() {
   const now = new Date();
   const timePart = now.toLocaleTimeString(currentLang === 'en' ? 'en-US' : 'ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit' });
@@ -12232,7 +12252,7 @@ function buildPrintBrandFooterHtml() {
       <span>${esc(orgDisplayName())} — ${afifRestrictedMode ? esc(orgTrackDisplayName()) : esc(t('earlyDetectionInitiative')) + ' ' + esc(modLabel())}</span>
       <span>${esc(t('generatedAtLbl'))}: ${esc(fmtDateLocalized(now))}، ${esc(timePart)}</span>
     </div>
-    ${afifRestrictedMode ? `<div style="text-align:center; font-size:11px; font-weight:700; color:var(--muted); margin-top:8px">${esc(t('afifMammoSupervisorLbl'))}: رنيم محمد العتيبي</div>` : ''}`;
+    <div style="text-align:center; font-size:11px; font-weight:700; color:var(--muted); margin-top:8px">${esc(buildReportSignatureText())}</div>`;
 }
 
 // Normalizes a value into a clean comparable number string:
@@ -19390,7 +19410,7 @@ function generateReport(autoRefresh) {
   const nowTimePart = nowForFooter.toLocaleTimeString(currentLang === 'en' ? 'en-US' : 'ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit' });
   document.getElementById('report-generated-on').textContent = `${t('generatedAtLbl')}: ${fmtDateLocalized(nowForFooter)}، ${nowTimePart}`;
   const sigEl = document.getElementById('report-footer-signature');
-  if (sigEl) sigEl.textContent = afifRestrictedMode ? `${t('afifMammoSupervisorLbl')}: رنيم محمد العتيبي` : '';
+  if (sigEl) sigEl.textContent = buildReportSignatureText();
   // Reuse the header logo inside the report
   const headerLogo = document.querySelector('.logo img');
   if (headerLogo) document.getElementById('report-logo').src = headerLogo.src;
