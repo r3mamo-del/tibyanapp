@@ -1256,7 +1256,11 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
     body.printing-report .report-header-bar { margin-bottom: 2px; }
     body.printing-report #report-logo { height: 24px !important; }
     body.printing-report .report-highlights { margin: 2px 0; font-size: 11px; }
-    body.printing-report table.report-table { margin-top: 3px; font-size: 11px; }
+    /* بناء على طلب صريح: بدل محاولة ضغط كل المحتوى بصفحة واحدة (تفشل
+       بشكل متكرر بمتصفح الجوال حتى بعد عدة محاولات تصغير/ضغط)، كل قسم
+       رئيسي يبدأ بصفحة جديدة عمدًا — أنظف وأكثر ثباتًا عبر كل الأجهزة
+       من محاولة الملائمة القسرية. */
+    body.printing-report table.report-table { margin-top: 3px; font-size: 11px; page-break-before: always; break-before: page; }
     body.printing-report table.report-table th,
     body.printing-report table.report-table td { padding: 5px 4px; }
     body.printing-report table.report-table td { border-bottom: 1px solid var(--border); }
@@ -3348,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.10.1</span>
+  <span id="app-version">الإصدار 8.10.2</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -13902,12 +13906,25 @@ function todayDateString() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
+// بناء على طلب صريح: تنبيه "حالة جديدة" (بانتظار أي متابعة) كان يتحقق
+// فقط من عدم وجود بيانات متابعة، بدون أي فحص لتاريخ الحالة نفسها —
+// فحالة قديمة جدًا (من قبل أشهر) ناقصة المتابعة تضل تظهر كـ"جديدة"
+// للأبد. الآن يُشترط إضافيًا إن تاريخ الفحص يقع بنفس الشهر والسنة
+// الحاليين — حالة قديمة ناقصة المتابعة لسه مهمة، بس تُعتبر "متأخرة"
+// (نفس فحص computeCaseStatus الأحمر) مو "جديدة".
+function isSameMonthAsToday(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
 function isCriticalPositiveCase(e) {
   if (afifRestrictedMode && e.hospital !== RESTRICTED_HOSPITAL) return false;
   if (e.notifDismissedDate === todayDateString()) return false; // dismissed for today
   if (computeCaseStatus(e) === 'red') return true;
   const nothingRecorded = !e.biopsyDate && !e.biopsyStatus && !e.biopsyDone && !e.notes && !e.referenceConfirmed;
-  return nothingRecorded;
+  return nothingRecorded && isSameMonthAsToday(usableExamDate(e));
 }
 function getCriticalPositiveCases() {
   return positiveLog.filter(isCriticalPositiveCase);
