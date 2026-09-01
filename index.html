@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.10.2</span>
+  <span id="app-version">الإصدار 8.10.3</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -14364,7 +14364,16 @@ setInterval(checkOverdueBiopsies, 60000);
 let pendingPositiveNotifications = [];
 let positiveNotifyTimer = null;
 function queuePositiveNotifications(entries) {
-  pendingPositiveNotifications.push(...entries);
+  // بناء على طلب صريح: هذا التنبيه (يظهر عند اكتشاف حالات إيجابية جديدة
+  // أثناء فحص/إعادة فحص الملفات) كان يعرض كل حالة تُكتشف حديثًا بصرف
+  // النظر عن تاريخ تسجيلها الفعلي — فإعادة فحص شاملة بعد أي تسوية
+  // بيانات كانت تُظهر عشرات الحالات القديمة جدًا (من قبل أشهر) كـ"جديدة".
+  // الآن يُشترط إن تاريخ الحالة يقع بنفس الشهر والسنة الحاليين قبل ما
+  // تنضم لقائمة التنبيه — حالات قديمة مكتشَفة حديثًا لسه تُسجَّل وتُحفظ
+  // عاديًا بالسجل، بس بدون تنبيه فوري لأنها مو "جديدة" فعليًا.
+  const recentEntries = entries.filter(e => isSameMonthAsToday(e.date));
+  if (recentEntries.length === 0) return;
+  pendingPositiveNotifications.push(...recentEntries);
   clearTimeout(positiveNotifyTimer);
   positiveNotifyTimer = setTimeout(flushPositiveNotifications, 900);
 }
@@ -18004,7 +18013,6 @@ function renderZoneReport(results, periodLabel, logoSrc) {
   if (afifRestrictedMode) { container.innerHTML = ''; return; }
   const byName = {};
   results.forEach(r => { byName[r.name] = r; });
-  const moduleArcColor = MOD().isDigitCategory ? '#8B1A2B' : '#E3CD3E';
   const logoHtml = logoSrc ? `<img class="zone-card-logo" src="${logoSrc}" alt="" />` : '';
   const docSearchIcon = `<svg class="hosp-mini-icon" viewBox="0 0 24 24" fill="none" stroke="#1F3F8F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><circle cx="10.5" cy="15.5" r="2.2"/><path d="M12.2 17.2 14 19"/></svg>`;
   const docClockIcon = `<svg class="hosp-mini-icon" viewBox="0 0 24 24" fill="none" stroke="#7A828C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><circle cx="12" cy="16" r="0"/></svg>`;
@@ -18054,7 +18062,7 @@ function renderZoneReport(results, periodLabel, logoSrc) {
         </div>
         <div class="zone-body">
           <div class="zone-gauge-wrap">
-            ${donutSvg(zonePct, {size:150, stroke:16, ringColor:moduleArcColor, trackColor:'#fff', trackOpacity:.3, textColor:'#fff'})}
+            ${donutSvg(zonePct, {size:150, stroke:16, ringColor:ringColorByPct(zonePct), trackColor:'#fff', trackOpacity:.3, textColor:'#fff'})}
           </div>
           <div class="zone-hospitals">${hospitalsHtml}</div>
         </div>
