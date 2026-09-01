@@ -1292,13 +1292,13 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
       display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 5px !important;
     }
     body.printing-report .zone-card {
-      padding: 5px; margin-top: 0; page-break-inside: avoid; break-inside: avoid;
+      padding: 5px; margin-top: 0;
       background: #2B3F6E !important; box-shadow: none;
     }
     body.printing-report .zone-card-title { font-size: 11px; }
     body.printing-report .zone-card-period { font-size: 7px; }
     body.printing-report .zone-card-logo { height: 14px; }
-    body.printing-report .zone-body { page-break-inside: avoid; break-inside: avoid; margin-top: 5px; gap: 5px; flex-direction: column; }
+    body.printing-report .zone-body { margin-top: 5px; gap: 5px; flex-direction: column; }
     body.printing-report .zone-gauge-wrap { page-break-inside: avoid; break-inside: avoid; }
     body.printing-report .zone-gauge-wrap svg { width: 40px; height: 40px; }
     body.printing-report .zone-hospitals { gap: 3px; grid-template-columns: 1fr; }
@@ -3348,7 +3348,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.9.8</span>
+  <span id="app-version">الإصدار 8.10.1</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -3867,6 +3867,7 @@ const I18N = {
     ageColLbl: "Age",
     noteColHeader: "Note",
     noteAgeOutside: "⚠ Age outside the target range",
+    noteAgeMissing: "⚠ Age not recorded / unreadable",
     noteWaitingResult: "⚠ Awaiting test result",
     lastRefSyncFailed: "⚠ Last attempt to pull the reference file failed: ",
     noPositiveCasesYet: "No positive cases logged for {module} yet",
@@ -4659,6 +4660,7 @@ const I18N = {
     ageColLbl: "العمر",
     noteColHeader: "ملاحظة",
     noteAgeOutside: "⚠ العمر خارج الفئة المستهدفة",
+    noteAgeMissing: "⚠ العمر غير مدرَج/غير مقروء",
     noteWaitingResult: "⚠ بانتظار نتيجة الفحص",
     lastRefSyncFailed: "⚠ آخر محاولة سحب من الملف المرجعي فشلت: ",
     noPositiveCasesYet: "لا توجد حالات إيجابية مسجّلة لـ{module} بعد",
@@ -9045,6 +9047,17 @@ function collectReportScanRowsUncached(range) {
     if (st.genderIdx === undefined) {
       st.genderIdx = findCol(st.pending.headerRow.map(normalizeLabel), ['gender', 'الجنس', 'sex']);
     }
+    // بحث احتياطي عن عمود العمر: عمود "العمر" بصفحة تقرير الأداء اختياري
+    // ويعتمد بالكامل على اختيار يدوي من المشرف لكل مستشفى — لو ما
+    // اختاره (يبقى -1 افتراضيًا)، فحص "الحالات بعمر غير مطابق" ما كان
+    // يشتغل إطلاقًا لذاك المستشفى بصمت، حتى لو الملف فيه عمود عمر واضح.
+    // مؤكَّد كحالة واقعية حقيقية (ملف الوزارة الشهري طلع فاضي من هالحالات
+    // رغم وجودها). هذا اكتشاف احتياطي محلي (مايغيّر اختيار المشرف
+    // المعروض بالواجهة نفسها) يُستخدم فقط لحساب استبعاد العمر هنا.
+    if (st.ageIdxAuto === undefined) {
+      st.ageIdxAuto = findCol(st.pending.headerRow.map(normalizeLabel), ['age', 'العمر', 'عمر']);
+    }
+    const effectiveAgeIdx = st.ageIdx >= 0 ? st.ageIdx : st.ageIdxAuto;
     if (st.secondaryDateIdx === undefined) {
       st.secondaryDateIdx = MOD().secondaryDateColHints
         ? findCol(st.pending.headerRow.map(normalizeLabel), MOD().secondaryDateColHints)
@@ -9311,15 +9324,17 @@ function collectReportScanRowsUncached(range) {
       // result is the most common "waiting for results" case by far.
       if (category === 'invalid') invalidResultCount++;
       if (st.biradIdx >= 0 && category === null) pendingResultCount++;
-      const age = st.ageIdx >= 0 ? extractAge(r[st.ageIdx]) : null;
+      const age = effectiveAgeIdx >= 0 ? extractAge(r[effectiveAgeIdx]) : null;
+      const genderEarly = st.genderIdx >= 0 ? String(r[st.genderIdx] ?? '').trim() : '';
       // Age-range exclusion: only applied when an age column was actually
-      // selected — an unreadable age counts as ineligible too (can't confirm).
-      if (st.ageIdx >= 0 && (age === null || age < MOD().ageMin || age > MOD().ageMax)) {
+      // detected (يدويًا أو تلقائيًا) — an unreadable age counts as
+      // ineligible too (can't confirm).
+      if (effectiveAgeIdx >= 0 && (age === null || age < MOD().ageMin || age > MOD().ageMax)) {
         ageExcluded++;
-        ageExcludedCases.push({ num, hospital: name, dateStr, dateCell, dateObj, biradRaw, category, age, excludeReason: 'age' });
+        ageExcludedCases.push({ num, hospital: name, dateStr, dateCell, dateObj, biradRaw, category, age, gender: genderEarly, excludeReason: 'age' });
         return;
       }
-      const gender = st.genderIdx >= 0 ? String(r[st.genderIdx] ?? '').trim() : '';
+      const gender = genderEarly;
       const candidate = { num, hospital: name, dateStr, dateCell, dateObj, biradRaw, category, age, gender, excludeReason: (st.biradIdx >= 0 && category === null) ? 'noResult' : null, row: r };
 
       const existing = byNum.get(num);
@@ -9390,7 +9405,7 @@ function collectReportScanRowsUncached(range) {
 // (positive results only, 25 columns including the full endoscopy/
 // biopsy/treatment follow-up chain). Shares the same follow-up-field
 // mapping helpers as the quarterly export for consistency.
-function exportColonMonthlyMinistryFile(cases, range, hospitalsUsed, duplicatesRemoved, auditDuplicatesRemoved, outOfPeriod, badDate, statusEl, fmt, dateAmbiguousCount) {
+function exportColonMonthlyMinistryFile(cases, range, hospitalsUsed, duplicatesRemoved, auditDuplicatesRemoved, outOfPeriod, badDate, statusEl, fmt, dateAmbiguousCount, ageExcludedCases) {
   const estimateSuffixRe = / \([^)]*\)$/;
   const cleanDate = c => (c.dateStr || '').replace(estimateSuffixRe, '');
 
@@ -9425,7 +9440,7 @@ function exportColonMonthlyMinistryFile(cases, range, hospitalsUsed, duplicatesR
   const screenedHeader = ['Date of Visit', 'Sector ', 'PHC/Hospital ', 'National ID', 'Gender',
     'Risk Group (Average/High)', 'Age', 'Select the risk factor', 'Screening tool',
     'Date of ordering the KIT', 'Date of receiving  sample from patient', 'Date of Lab result ',
-    'Test result ', 'Cluster'];
+    'Test result ', 'Cluster', t('noteColHeader')];
   const positiveHeader = ['Date of Visit', 'Sector ', 'PHC/Hospital ', 'National ID', 'Gender',
     'Risk Group (Average/High)', 'Age', 'Select the risk factor', 'Screening tool',
     'Date of ordering the KIT', 'Date of receiving  sample from patient', 'Date of Lab result ',
@@ -9455,8 +9470,17 @@ function exportColonMonthlyMinistryFile(cases, range, hospitalsUsed, duplicatesR
   const screenedRows = clearResultCases.map(c => [
     cleanDate(c), 'Ministry of Health', 'Hospital', c.num, normalizeGender(c.gender),
     'Average Risk', c.age ?? '', 'Aged 45-75 years', 'Fit', cleanDate(c), cleanDate(c), cleanDate(c),
-    c.category === 'positive' ? 'POSITIVE' : 'NEGATIVE', CLUSTER_NAME,
+    c.category === 'positive' ? 'POSITIVE' : 'NEGATIVE', CLUSTER_NAME, '',
   ]);
+  // بناء على طلب صريح: الحالات المستبعدة بسبب عمر غير مطابق أو غير
+  // مدرَج تُضاف هنا بعمود ملاحظة يوضّح السبب — بدل استبعادها كليًا.
+  (ageExcludedCases || []).forEach(c => {
+    screenedRows.push([
+      cleanDate(c), 'Ministry of Health', 'Hospital', c.num, normalizeGender(c.gender),
+      'Average Risk', c.age ?? '', 'Aged 45-75 years', 'Fit', cleanDate(c), cleanDate(c), cleanDate(c),
+      '', CLUSTER_NAME, c.age === null ? t('noteAgeMissing') : t('noteAgeOutside'),
+    ]);
+  });
 
   const positiveRows = clearResultCases.filter(c => isPositiveCategory(c.category)).map(c => {
     const logEntry = logByNum.get(c.num);
@@ -9507,7 +9531,7 @@ function exportTemplateFromReport() {
     statusEl.textContent = t('errPickReportPeriod');
     return;
   }
-  const { range, hospitalsUsed, duplicatesRemoved, auditDuplicatesRemoved, outOfPeriod, badDate, dateAmbiguousCount, cases } = res;
+  const { range, hospitalsUsed, duplicatesRemoved, auditDuplicatesRemoved, outOfPeriod, badDate, dateAmbiguousCount, cases, ageExcludedCases } = res;
 
   if (hospitalsUsed === 0) {
     statusEl.style.color = 'var(--danger)';
@@ -9520,15 +9544,20 @@ function exportTemplateFromReport() {
     return;
   }
 
-  // Colon's official monthly submission ("Colorectal Cancer" workbook) has
-  // a completely different shape from breast's — two sheets ("Screend
-  // cases" / "Positive cases"), each with columns like Gender, PHC/
-  // Hospital, Screening tool, and the full endoscopy/biopsy/treatment
-  // follow-up chain — verified line-by-line against an actual submitted
-  // ministry file. Building it with the generic breast-shaped template
-  // below would silently produce the wrong columns entirely.
+  // بناء على طلب صريح: الحالات المستبعدة بسبب عمر غير مطابق للفئة
+  // المستهدفة (أو عمر غير مدرَج/غير مقروء أصلًا) تُضاف الآن لملف
+  // الوزارة الشهري مع ملاحظة توضّح السبب بعمود الملاحظات — بدل
+  // استبعادها كليًا كما كان سابقًا. إزالة التكرار حسب رقم الهوية أولًا
+  // (الاحتفاظ بآخر ظهور، بنفس منطق باقي الحالات)، مع استبعاد أي هوية
+  // موجودة أصلًا ضمن الحالات الصافية (cases) عشان ما تتكرر الحالة
+  // نفسها مرتين بالملف الواحد.
+  const netIds = new Set(cases.map(c => c.num));
+  const ageExcludedByNum = new Map();
+  (ageExcludedCases || []).forEach(c => { if (!netIds.has(c.num)) ageExcludedByNum.set(c.num, c); });
+  const dedupedAgeExcludedCases = [...ageExcludedByNum.values()];
+
   if (MOD().key === 'colon') {
-    exportColonMonthlyMinistryFile(cases, range, hospitalsUsed, duplicatesRemoved, auditDuplicatesRemoved, outOfPeriod, badDate, statusEl, fmt, dateAmbiguousCount);
+    exportColonMonthlyMinistryFile(cases, range, hospitalsUsed, duplicatesRemoved, auditDuplicatesRemoved, outOfPeriod, badDate, statusEl, fmt, dateAmbiguousCount, dedupedAgeExcludedCases);
     return;
   }
 
@@ -9541,10 +9570,9 @@ function exportTemplateFromReport() {
     MOD().ministryResultDateLabel, catHeader,'Date of confirmed final diagnosis',
     'Final diagnosis','Cancer stage','Treated at the Cluster? ','If "No",what is the reason ','Cluster', t('noteColHeader')];
 
-  // Age-excluded cases used to be added here too, clearly flagged — now
-  // excluded entirely per explicit request, matching the report's own
-  // net-final total exactly.
-  const allScreenedCases = [...cases];
+  // Age-excluded cases now re-included (per explicit request), flagged
+  // with a note in the last column — see dedupedAgeExcludedCases above.
+  const allScreenedCases = [...cases, ...dedupedAgeExcludedCases];
   const screenedRows = [];
   const recallRows = [];
   const screenedNoteRowIdx = []; // 0-based index into screenedRows that needs highlighting
@@ -9560,7 +9588,7 @@ function exportTemplateFromReport() {
     const estimateSuffixRe = / \([^)]*\)$/;
     const hadEstimateSuffix = estimateSuffixRe.test(c.dateStr || '');
     const cleanDateStr = (c.dateStr || '').replace(estimateSuffixRe, '');
-    const note = c.excludeReason === 'age' ? t('noteAgeOutside')
+    const note = c.excludeReason === 'age' ? (c.age === null ? t('noteAgeMissing') : t('noteAgeOutside'))
       : c.excludeReason === 'noResult' ? t('noteWaitingResult')
       : hadEstimateSuffix ? t('estimatedFromNearestParen2') : '';
     if (note) screenedNoteRowIdx.push(screenedRows.length);
