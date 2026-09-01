@@ -1362,6 +1362,21 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
     body.printing-detailed #report-builder-card { padding:0 !important; margin:0 !important; border:none !important; box-shadow:none !important; }
     body.printing-detailed { background: #fff !important; }
     @page { margin: 8mm; }
+    /* ─── توقيع تذييل التقارير (ختم "معتمد" / نص "للاطلاع") ──────────────
+       حجم عادي للمعاينة على الشاشة، ومصغَّر جدًا وقت الطباعة الفعلية —
+       الصفحات هنا مضغوطة عمدًا (هوامش 1-3px بكل مكان) عشان تتلائم
+       بصفحة وحدة؛ الختم بحجمه الأصلي كان كافي يدفع المحتوى لصفحة ثانية.
+       مؤكَّد كحالة واقعية حقيقية. */
+    .sig-stamp-wrap { display:flex; flex-direction:column; align-items:center; gap:1px; margin-top:4px; }
+    .sig-stamp-line { font-size:10px; font-weight:700; color:var(--muted); line-height:1.3; }
+    .sig-stamp-svg { width:64px; height:64px; margin-top:2px; flex-shrink:0; transform:rotate(-9deg); opacity:.88; }
+    .sig-plain { text-align:center; font-size:11px; font-weight:700; color:var(--muted); margin-top:8px; }
+    @media print {
+      .sig-stamp-wrap { margin-top: 2px !important; gap: 0 !important; }
+      .sig-stamp-line { font-size: 7.5px !important; line-height: 1.15 !important; }
+      .sig-stamp-svg { width: 40px !important; height: 40px !important; margin-top: 1px !important; }
+      .sig-plain { margin-top: 3px !important; font-size: 9px !important; }
+    }
     
     body.printing-detailed #app-footer,
     body.printing-detailed #module-watermark,
@@ -3325,7 +3340,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.9.3</span>
+  <span id="app-version">الإصدار 8.9.5</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -3810,7 +3825,7 @@ const I18N = {
     updatingAuditFileMsg: "Updating audit file from Drive...",
     auditFileSyncedMsg: "✓ Audit file synced — {n} record(s) processed (merged with existing, not replaced)",
     auditDriveSectionTitle: "Audit File",
-    pathwayLeadNameLabel: "Breast & Colon Tumor Pathway Lead Name",
+    pathwayLeadNameLabel: "Breast & Colon Tumor Pathway Lead",
     auditLiveStatusMsg: "Connected to audit data",
     auditLiveStatusOfflineMsg: "Not connected — no audit data loaded yet",
     confirmAutoCorrectMsg: "This will correct {n} suspected day/month-swapped date(s) at: {hospitals}. Continue?",
@@ -4602,7 +4617,7 @@ const I18N = {
     optQ4: "الربع الرابع",
     printHospitalScopeLbl: "طباعة لوحة المؤشرات لـ",
     optAllHospitals: "كل المستشفيات (مجمّع)",
-    pathwayLeadNameLabel: "اسم قائد مسار أورام الثدي والقولون",
+    pathwayLeadNameLabel: "قائد مسار أورام الثدي والقولون",
     auditLiveStatusMsg: "متصل ببيانات التدقيق",
     auditLiveStatusOfflineMsg: "غير متصل ببيانات التدقيق — اضغط تحديث البيانات",
     confirmAutoCorrectMsg: "سيتم تصحيح {n} تاريخ محتمل الانعكاس (يوم/شهر) بالمستشفيات التالية: {hospitals}. هل تريد المتابعة؟",
@@ -12242,18 +12257,36 @@ function buildPrintBrandHeaderHtml(title, periodText) {
 function buildReportSignatureHtml() {
   if (gatewayLoginChoice === 'masar') {
     return `
-      <div style="display:flex; flex-direction:column; align-items:center; gap:1px; margin-top:4px">
-        <div style="font-size:10px; font-weight:700; color:var(--muted); line-height:1.3">${esc(t('pathwayLeadNameLabel'))}</div>
-        <div style="font-size:10px; font-weight:700; color:var(--muted); line-height:1.3">أ. حصة مشبب البقمي</div>
-        <div style="width:46px; height:46px; border:2px solid #1F3F8F; border-radius:50%; display:flex; align-items:center; justify-content:center; transform:rotate(-8deg); margin-top:2px; flex-shrink:0">
-          <span style="color:#1F3F8F; font-weight:800; font-size:9px">${esc(t('signatureApprovedLbl'))}</span>
-        </div>
+      <div class="sig-stamp-wrap">
+        <div class="sig-stamp-line">${esc(t('pathwayLeadNameLabel'))}</div>
+        <div class="sig-stamp-line">أ. حصة مشبب البقمي</div>
+        <svg class="sig-stamp-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="47" fill="none" stroke="#1F3F8F" stroke-width="1.4"/>
+          <circle cx="50" cy="50" r="39" fill="none" stroke="#1F3F8F" stroke-width="3"/>
+          <g fill="#1F3F8F">
+            <circle cx="50" cy="6.5" r="1.7"/>
+            <circle cx="72.5" cy="12.7" r="1.3"/>
+            <circle cx="88.3" cy="27.5" r="1.3"/>
+            <circle cx="93.5" cy="50" r="1.3"/>
+            <circle cx="88.3" cy="72.5" r="1.3"/>
+            <circle cx="72.5" cy="87.3" r="1.3"/>
+            <circle cx="50" cy="93.5" r="1.7"/>
+            <circle cx="27.5" cy="87.3" r="1.3"/>
+            <circle cx="11.7" cy="72.5" r="1.3"/>
+            <circle cx="6.5" cy="50" r="1.3"/>
+            <circle cx="11.7" cy="27.5" r="1.3"/>
+            <circle cx="27.5" cy="12.7" r="1.3"/>
+          </g>
+          <text x="50" y="35" font-size="7.5" font-weight="800" fill="#1F3F8F" text-anchor="middle" font-family="Tahoma, Arial, sans-serif">Screening 2care</text>
+          <path d="M 28 45 L 72 45" stroke="#1F3F8F" stroke-width="1.2"/>
+          <text x="50" y="68" font-size="19" font-weight="800" fill="#1F3F8F" text-anchor="middle" font-family="Tahoma, Arial, sans-serif">${esc(t('signatureApprovedLbl'))}</text>
+        </svg>
       </div>`;
   }
   if (afifRestrictedMode) {
-    return `<div style="text-align:center; font-size:11px; font-weight:700; color:var(--muted); margin-top:8px">${esc(t('afifMammoSupervisorLbl'))}: رنيم محمد العتيبي — ${esc(t('signatureForReviewLbl'))}</div>`;
+    return `<div class="sig-plain">${esc(t('afifMammoSupervisorLbl'))}: رنيم محمد العتيبي — ${esc(t('signatureForReviewLbl'))}</div>`;
   }
-  return `<div style="text-align:center; font-size:11px; font-weight:700; color:var(--muted); margin-top:8px">${esc(t('signatureForReviewLbl'))}</div>`;
+  return `<div class="sig-plain">${esc(t('signatureForReviewLbl'))}</div>`;
 }
 function buildPrintBrandFooterHtml() {
   const now = new Date();
