@@ -2938,7 +2938,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
           <span id="report-footer-org" data-i18n="reportFooterOrg">تجمع الرياض الصحي الثالث — الكشف المبكر عن أورام الثدي</span>
           <span id="report-generated-on"></span>
         </div>
-        <div id="report-footer-signature" class="dr-print-only" style="text-align:center; font-size:11px; font-weight:700; color:var(--muted); margin-top:8px"></div>
+        <div id="report-footer-signature" class="dr-print-only" style="text-align:center; font-size:11px; font-weight:700; color:var(--muted)"></div>
       </div>
 
       </div><!-- /admin-page-report -->
@@ -3325,7 +3325,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.9.2</span>
+  <span id="app-version">الإصدار 8.9.3</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -12230,19 +12230,30 @@ function buildPrintBrandHeaderHtml(title, periodText) {
     </div>`;
 }
 // ─── توقيع تذييل التقارير المطبوعة ──────────────────────────────────────
-// يتحدَّد نص التوقيع حسب نوع الدخول الفعلي (gatewayLoginChoice) — بناءً
+// يتحدَّد شكل التوقيع حسب نوع الدخول الفعلي (gatewayLoginChoice) — بناءً
 // على طلب صريح: أي طباعة صادرة عن دخول "مسار أورام الثدي والقولون" (قائد
-// المسار، صاحب الصلاحية الكاملة) تُذيَّل بـ"معتمد"، وأي طباعة صادرة عن
-// أي دخول آخر (عفيف المقيَّد أو MOC-R3) تُذيَّل بـ"للاطلاع" بدلًا من ذلك
-// — تمييز واضح بين التقرير المعتمد رسميًا والتقرير للعلم فقط.
-function buildReportSignatureText() {
+// المسار، صاحب الصلاحية الكاملة) تُذيَّل بختم دائري رمزي أزرق مكتوب فيه
+// "معتمد"، وأي طباعة صادرة عن أي دخول آخر (عفيف المقيَّد أو MOC-R3)
+// تُذيَّل بنص "للاطلاع" البسيط بدون ختم — تمييز واضح بين التقرير المعتمد
+// رسميًا والتقرير للعلم فقط.
+// الحجم مضغوط عمدًا (دائرة صغيرة، فراغات قليلة) عشان إضافة الختم ما
+// تدفع محتوى التقرير لصفحة ثانية زيادة — مؤكَّد كحالة واقعية حقيقية
+// (تقرير كان صفحة وحدة صار صفحتين بعد أول نسخة من التوقيع).
+function buildReportSignatureHtml() {
   if (gatewayLoginChoice === 'masar') {
-    return `${t('pathwayLeadNameLabel')}: أ. حصة مشبب البقمي — ${t('signatureApprovedLbl')}`;
+    return `
+      <div style="display:flex; flex-direction:column; align-items:center; gap:1px; margin-top:4px">
+        <div style="font-size:10px; font-weight:700; color:var(--muted); line-height:1.3">${esc(t('pathwayLeadNameLabel'))}</div>
+        <div style="font-size:10px; font-weight:700; color:var(--muted); line-height:1.3">أ. حصة مشبب البقمي</div>
+        <div style="width:46px; height:46px; border:2px solid #1F3F8F; border-radius:50%; display:flex; align-items:center; justify-content:center; transform:rotate(-8deg); margin-top:2px; flex-shrink:0">
+          <span style="color:#1F3F8F; font-weight:800; font-size:9px">${esc(t('signatureApprovedLbl'))}</span>
+        </div>
+      </div>`;
   }
   if (afifRestrictedMode) {
-    return `${t('afifMammoSupervisorLbl')}: رنيم محمد العتيبي — ${t('signatureForReviewLbl')}`;
+    return `<div style="text-align:center; font-size:11px; font-weight:700; color:var(--muted); margin-top:8px">${esc(t('afifMammoSupervisorLbl'))}: رنيم محمد العتيبي — ${esc(t('signatureForReviewLbl'))}</div>`;
   }
-  return t('signatureForReviewLbl');
+  return `<div style="text-align:center; font-size:11px; font-weight:700; color:var(--muted); margin-top:8px">${esc(t('signatureForReviewLbl'))}</div>`;
 }
 function buildPrintBrandFooterHtml() {
   const now = new Date();
@@ -12252,7 +12263,7 @@ function buildPrintBrandFooterHtml() {
       <span>${esc(orgDisplayName())} — ${afifRestrictedMode ? esc(orgTrackDisplayName()) : esc(t('earlyDetectionInitiative')) + ' ' + esc(modLabel())}</span>
       <span>${esc(t('generatedAtLbl'))}: ${esc(fmtDateLocalized(now))}، ${esc(timePart)}</span>
     </div>
-    <div style="text-align:center; font-size:11px; font-weight:700; color:var(--muted); margin-top:8px">${esc(buildReportSignatureText())}</div>`;
+    ${buildReportSignatureHtml()}`;
 }
 
 // Normalizes a value into a clean comparable number string:
@@ -19410,7 +19421,7 @@ function generateReport(autoRefresh) {
   const nowTimePart = nowForFooter.toLocaleTimeString(currentLang === 'en' ? 'en-US' : 'ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit' });
   document.getElementById('report-generated-on').textContent = `${t('generatedAtLbl')}: ${fmtDateLocalized(nowForFooter)}، ${nowTimePart}`;
   const sigEl = document.getElementById('report-footer-signature');
-  if (sigEl) sigEl.textContent = buildReportSignatureText();
+  if (sigEl) sigEl.innerHTML = buildReportSignatureHtml();
   // Reuse the header logo inside the report
   const headerLogo = document.querySelector('.logo img');
   if (headerLogo) document.getElementById('report-logo').src = headerLogo.src;
