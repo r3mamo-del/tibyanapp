@@ -1258,7 +1258,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
     body.printing-report .report-highlights { margin: 2px 0; font-size: 11px; }
     body.printing-report table.report-table { margin-top: 3px; font-size: 11px; }
     body.printing-report table.report-table th,
-    body.printing-report table.report-table td { padding: 7px 4px; }
+    body.printing-report table.report-table td { padding: 5px 4px; }
     body.printing-report table.report-table td { border-bottom: 1px solid var(--border); }
 
     /* Windows' Arabic-locale print/PDF driver silently substitutes Western
@@ -1372,9 +1372,9 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
     .sig-stamp-svg { width:64px; height:64px; margin-top:2px; flex-shrink:0; transform:rotate(-9deg); opacity:.88; }
     .sig-plain { text-align:center; font-size:11px; font-weight:700; color:var(--muted); margin-top:8px; }
     @media print {
-      .sig-stamp-wrap { margin-top: 2px !important; gap: 0 !important; }
-      .sig-stamp-line { font-size: 7.5px !important; line-height: 1.15 !important; }
-      .sig-stamp-svg { width: 40px !important; height: 40px !important; margin-top: 1px !important; }
+      .sig-stamp-wrap { margin-top: 1px !important; gap: 0 !important; }
+      .sig-stamp-line { font-size: 6.5px !important; line-height: 1.05 !important; }
+      .sig-stamp-svg { width: 30px !important; height: 30px !important; margin-top: 0 !important; }
       .sig-plain { margin-top: 3px !important; font-size: 9px !important; }
     }
     
@@ -3340,7 +3340,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.9.5</span>
+  <span id="app-version">الإصدار 8.9.6</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -20978,9 +20978,20 @@ function showInfoModal(title, bodyHtml, tone) {
 // الصفحة كاملة غير محصورة بدل التقرير المقصود فقط. مؤكَّد كحالة واقعية
 // حقيقية. الحل: حدث afterprint المدمَّج بالمتصفح يشتغل بدقة لحظة اكتمال/
 // إلغاء الطباعة الفعلية مهما كان التأخير، فنعتمد عليه بدل مهلة ثابتة.
+//
+// تحديث إضافي: afterprint وحده مو موثوق بالكامل بمتصفح Safari بالجوال —
+// لو المستخدم أغلق/ألغى شاشة معاينة الطباعة بدل إكمالها فعليًا، الحدث
+// أحيانًا ما يشتغل إطلاقًا، فيضل الكلاس عالق للأبد — ومحتوى مخصص للطباعة
+// فقط (dr-print-only) زي ختم "معتمد" يبان بالواجهة العادية بشكل دائم.
+// مؤكَّد كحالة واقعية حقيقية (بلاغ مباشر: الختم ظهر بالواجهة). الحل:
+// طبقتين حماية إضافيتين: (1) مهلة أمان قصوى (20 ثانية) تنظّف الكلاس
+// بأي حال حتى لو ما اشتغل afterprint إطلاقًا، (2) تنظيف فوري لما يرجع
+// التبويب مرئي بعد ما كان مختفي (نمط شائع لما تُغلق شاشة الطباعة بالجوال).
 let __activePrintClasses = [];
 let __activePrintExtraCleanup = null;
-window.addEventListener('afterprint', () => {
+let __printCleanupFailsafeTimer = null;
+function __runPrintCleanup() {
+  if (__printCleanupFailsafeTimer) { clearTimeout(__printCleanupFailsafeTimer); __printCleanupFailsafeTimer = null; }
   if (__activePrintClasses.length) {
     __activePrintClasses.forEach(c => document.body.classList.remove(c));
     __activePrintClasses = [];
@@ -20989,10 +21000,16 @@ window.addEventListener('afterprint', () => {
     try { __activePrintExtraCleanup(); } catch (e) { console.error('print cleanup failed', e); }
     __activePrintExtraCleanup = null;
   }
+}
+window.addEventListener('afterprint', __runPrintCleanup);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && __activePrintClasses.length) __runPrintCleanup();
 });
 function markPrintClassesForCleanup(classes, extraCleanup) {
   __activePrintClasses = Array.isArray(classes) ? classes : [classes];
   __activePrintExtraCleanup = typeof extraCleanup === 'function' ? extraCleanup : null;
+  if (__printCleanupFailsafeTimer) clearTimeout(__printCleanupFailsafeTimer);
+  __printCleanupFailsafeTimer = setTimeout(__runPrintCleanup, 20000);
 }
 // Custom, branded replacement for the browser's native showAlertModal() — same
 // "نظام رقيب" styling as every other popup, instead of a generic
