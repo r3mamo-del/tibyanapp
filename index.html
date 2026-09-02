@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.10.8</span>
+  <span id="app-version">الإصدار 8.10.9</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6159,6 +6159,13 @@ function printHub5ReportSet() {
   showLoadingOverlay('جاري تجهيز التقارير...');
   const sections = [];
   const hubHospital = document.getElementById('printhub-hospital')?.value || 'all';
+  let ph5OriginalPosFrom = null, ph5OriginalPosTo = null;
+  const ph5RestorePositiveLogFields = () => {
+    const posFromEl = document.getElementById('positive-log-filter-from');
+    const posToEl = document.getElementById('positive-log-filter-to');
+    if (posFromEl && ph5OriginalPosFrom !== null) posFromEl.value = ph5OriginalPosFrom;
+    if (posToEl && ph5OriginalPosTo !== null) posToEl.value = ph5OriginalPosTo;
+  };
 
   // ─── حارس أمان ضد "العالقة" (fail-safe) ────────────────────────────
   // أي خطأ غير متوقَّع بمنتصف السلسلة (عنصر مو موجود بعد، بيانات
@@ -6178,6 +6185,7 @@ function printHub5ReportSet() {
     console.error(`printHub5ReportSet ${step} failed — aborting safely`, e);
     ph5Finished = true;
     clearTimeout(ph5FailSafeTimer);
+    ph5RestorePositiveLogFields();
     hideLoadingOverlay();
     showAlertModal(t('printHubNoContentMsg'));
     switchAdminPage('printhub');
@@ -6186,6 +6194,7 @@ function printHub5ReportSet() {
   const restoreAndFinish = () => {
     ph5Finished = true;
     clearTimeout(ph5FailSafeTimer);
+    ph5RestorePositiveLogFields();
     const container = document.getElementById('printhub-combined-output');
     container.innerHTML = sections.map((html, idx) => `<div style="page-break-before:always; padding-top:${idx === 0 ? '0' : '10px'}">${html}</div>`).join('');
     // Strip the leading page-break on the very first section so it
@@ -6228,31 +6237,34 @@ function printHub5ReportSet() {
   // منطق، بس يخلي window.print() بنفس اللحظة المتزامنة لضغطة الزر
   // تمامًا مثل بقية أزرار الطباعة الفردية بالتطبيق (التي تشتغل صح).
   try {
-    // Step 1: تقرير الأداء — sync dates + hospital scope, generate, then capture #report-output.
+    // Step 1: تقرير الأداء — الفترة تُحسب محليًا وتُمرَّر مباشرة لكل خطوة
+    // (بدل الكتابة على حقول reportDateFrom/reportDateTo/reportPeriod
+    // المشتركة) — بناء على طلب صريح: كل تقرير بهالسلسلة يُعزل حسابيًا
+    // لوحده، وما يخلّف أي أثر على حقول صفحات ثانية بعد ما تخلص الطباعة.
     const hubFrom = document.getElementById('printhub-from')?.value || '';
     const hubTo = document.getElementById('printhub-to')?.value || '';
+    let hubRange = null;
+    if (hubFrom && hubTo) {
+      const from = new Date(hubFrom + 'T00:00:00');
+      const to = new Date(hubTo + 'T00:00:00');
+      if (!isNaN(from.getTime()) && !isNaN(to.getTime()) && to >= from) hubRange = { from, to };
+    }
     switchAdminPage('report');
-    const reportFromEl = document.getElementById('reportDateFrom');
-    const reportToEl = document.getElementById('reportDateTo');
-    const reportPeriodEl = document.getElementById('reportPeriod');
     const reportScopeEl = document.getElementById('reportExcludedScopeSelect');
     try { buildReportExcludedScopeOptions(); } catch (e) { console.error('buildReportExcludedScopeOptions failed', e); }
-    if (reportFromEl) reportFromEl.value = hubFrom;
-    if (reportToEl) reportToEl.value = hubTo;
-    if (reportPeriodEl) reportPeriodEl.value = 'custom';
     if (reportScopeEl) {
       if (hubHospital === 'all') reportScopeEl.value = '__all__';
       else if ([...reportScopeEl.options].some(o => o.value === hubHospital)) reportScopeEl.value = hubHospital;
     }
     try {
-      generateReport();
+      generateReport(false, hubRange);
       // instant=true يتخطى حركة العدّ التدريجي (700ms) ويثبّت الأرقام
       // فورًا — أساسي هنا لأن السطر التالي يلتقط innerHTML مباشرة بدون
       // أي تأخير (عشان تضل الطباعة مرتبطة بضغطة المستخدم المباشرة على
       // iPadOS/iOS)، وبدون هذا كان الالتقاط يصير ولسه الأرقام بمنتصف
       // الحركة (قريبة من صفر)، فيطبع التقرير التفصيلي فاضي أو ناقص رغم
       // وجود بيانات فعلية — مؤكَّد كحالة واقعية حقيقية (بلاغ مباشر).
-      if (typeof generateDetailedReport === 'function') generateDetailedReport(true);
+      if (typeof generateDetailedReport === 'function') generateDetailedReport(true, hubRange);
     } catch (e) { console.error('printHub5ReportSet step1 (generateReport/generateDetailedReport) failed', e); }
     if (typeof lastReportRows !== 'undefined' && lastReportRows.length === 0) {
       console.warn('printHub5ReportSet: lastReportRows is empty after generateReport() — the performance-report section will be blank. Check that hospital files/targets exist for the selected dates.');
@@ -6310,7 +6322,7 @@ function printHub5ReportSet() {
     detailedHiddenEls.forEach(el => el.classList.remove('print-hide'));
 
     // Step 2: السجلات المستبعدة — build (skipPrint=true), capture shared container.
-    try { printReportExcludedRows(true); } catch (e) { console.error('printHub5ReportSet step2 (excluded rows) failed', e); }
+    try { printReportExcludedRows(true, hubRange); } catch (e) { console.error('printHub5ReportSet step2 (excluded rows) failed', e); }
     const excludedEl = document.getElementById('report-excluded-print-only');
     if (excludedEl && excludedEl.innerHTML.trim()) {
       sections.push(excludedEl.innerHTML);
@@ -6322,7 +6334,7 @@ function printHub5ReportSet() {
     // مستبعدة من وضع الدخول المقيد لعفيف تحديدًا (afifRestrictedMode)
     // بناءً على طلب صريح — تبقى موجودة بالدخول العادي (كل المستشفيات).
     if (!afifRestrictedMode) {
-      try { printDataEntryErrorsReport(true); } catch (e) { console.error('printHub5ReportSet step3 (data errors) failed', e); }
+      try { printDataEntryErrorsReport(true, hubRange); } catch (e) { console.error('printHub5ReportSet step3 (data errors) failed', e); }
       const errorsEl = document.getElementById('report-excluded-print-only');
       if (errorsEl && errorsEl.innerHTML.trim()) sections.push(errorsEl.innerHTML);
     }
@@ -6330,7 +6342,7 @@ function printHub5ReportSet() {
     // Step 2b: الحالات المكررة — own dedicated container.
     // مستبعدة من وضع الدخول المقيد لعفيف تحديدًا (نفس الاستثناء أعلى).
     if (!afifRestrictedMode) {
-      try { printDuplicateCasesReport(true); } catch (e) { console.error('printHub5ReportSet step2b (duplicate cases) failed', e); }
+      try { printDuplicateCasesReport(true, hubRange); } catch (e) { console.error('printHub5ReportSet step2b (duplicate cases) failed', e); }
       const dupEl = document.getElementById('duplicate-cases-print-only');
       if (dupEl && dupEl.innerHTML.trim()) sections.push(dupEl.innerHTML);
     }
@@ -6345,6 +6357,12 @@ function printHub5ReportSet() {
     // manually visited this page before).
     const posFromEl = document.getElementById('positive-log-filter-from');
     const posToEl = document.getElementById('positive-log-filter-to');
+    // getPositiveLogPeriodFilter() ما تدعم تمرير فترة مباشرة (لسه) —
+    // نحفظ القيمة الأصلية هنا ونرجّعها بـrestoreAndFinish()/ph5Bail()
+    // عشان فترة "مركز الطباعة" ما تبقى "عالقة" بصفحة سجل الحالات
+    // الإيجابية بعد ما تخلص الطباعة، وتأثر على استخدام الصفحة لاحقًا.
+    ph5OriginalPosFrom = posFromEl ? posFromEl.value : null;
+    ph5OriginalPosTo = posToEl ? posToEl.value : null;
     if (posFromEl) posFromEl.value = hubFrom;
     if (posToEl) posToEl.value = hubTo;
     try { showPositiveLogPeriodSummaryModal(hubHospital); } catch (e) { console.error('printHub5ReportSet step4 (positive dashboard) failed', e); }
@@ -20178,9 +20196,9 @@ function exportAllUnreadableDatesExcel() {
   const dstr = new Date().toISOString().slice(0, 10);
   xlsxSave(wb, `${asciiModLabel()}_Unreadable-Dates_${dstr}.xlsx`);
 }
-function printDataEntryErrorsReport(skipPrint) {
+function printDataEntryErrorsReport(skipPrint, overrideRange) {
   const period = document.getElementById('reportPeriod').value;
-  const range = resolveReportRange(period);
+  const range = overrideRange || resolveReportRange(period);
   if (!range) { showAlertModal(t('errPickReportPeriod')); return; }
 
   if (!skipPrint) showLoadingOverlay('جاري فحص الملفات وتجهيز التقرير…');
@@ -20707,8 +20725,9 @@ function exportCorrectedDatesExcel() {
   const dstr = new Date().toISOString().slice(0, 10);
   xlsxSave(wb, `${asciiModLabel()}_Corrected-Dates_${dstr}.xlsx`);
 }
-function printReportExcludedRows(skipPrint) {  const period = document.getElementById('reportPeriod').value;
-  const range = resolveReportRange(period);
+function printReportExcludedRows(skipPrint, overrideRange) {
+  const period = document.getElementById('reportPeriod').value;
+  const range = overrideRange || resolveReportRange(period);
   if (!range) { showAlertModal(t('errPickReportPeriod')); return; }
 
   const { anyFile, totalsRows, excludedAllRows, scope } = collectReportExcludedNotesData(range);
@@ -20792,9 +20811,9 @@ function printReportExcludedRows(skipPrint) {  const period = document.getElemen
 // cross-hospital) — reuses the same detection already built into
 // collectReportExcludedNotesData(), just filtered down to duplicate
 // reasons specifically, for easy direct verification.
-function printDuplicateCasesReport(skipPrint) {
+function printDuplicateCasesReport(skipPrint, overrideRange) {
   const period = document.getElementById('reportPeriod').value;
-  const range = resolveReportRange(period);
+  const range = overrideRange || resolveReportRange(period);
   if (!range) { showAlertModal(t('errPickReportPeriod')); return; }
 
   if (!skipPrint) showLoadingOverlay('جاري فحص الحالات المكررة…');
