@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.10.7</span>
+  <span id="app-version">الإصدار 8.10.8</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -18878,12 +18878,12 @@ function finalizeDrCardNumbersInstant(container) {
   });
 }
 
-function generateDetailedReport(instant) {
+function generateDetailedReport(instant, overrideRange) {
   lastReportView = 'detailed';
   const out = document.getElementById('detailed-report-output');
   out.style.display = 'block';
 
-  const combined = collectReportScanRows();
+  const combined = collectReportScanRows(overrideRange);
   if (combined.error) {
     out.innerHTML = `<div class="card"><div class="result warn"><div class="result-title">${t('errPickValidPeriod')}</div></div></div>`;
     return;
@@ -19220,32 +19220,30 @@ async function generateBothReports() {
       ]);
     } catch (e) { /* continue with whatever is loaded even if Drive refresh fails */ }
   }
-  // بناء على طلب صريح: زر "عرض التقارير" هنا بصفحة "مركز الطباعة"، لكن
-  // generateReport()/generateDetailedReport() كانتا تتحققان من حقول
-  // تاريخ صفحة "تقرير الأداء" الثانية (reportPeriod/reportDateFrom/
-  // reportDateTo) — فحتى لو حددت الفترة صح بحقول هذي الصفحة (printhub-
-  // from/to)، الدالتين تفحصان حقول فاضية بصفحة ثانية وتظهر "حدد فترة
-  // صحيحة أولاً" رغم إنك فعلًا حددتها. نفس نمط الخلل الموثَّق سابقًا
-  // بأزرار طباعة ثانية بنفس الصفحة. الحل: مزامنة حقول هذي الصفحة لحقول
-  // صفحة "تقرير الأداء" قبل استدعاء الدالتين.
+  // بناء على طلب صريح: زر "عرض التقارير" هنا بصفحة "مركز الطباعة" —
+  // بدل ما نكتب فترة هذي الصفحة (printhub-from/to) على حقول صفحة
+  // "تقرير الأداء" المشتركة (reportPeriod/reportDateFrom/reportDateTo)،
+  // اللي احتمال يسبب تأثير جانبي على صفحات ثانية تعتمد نفس الحقول لاحقًا
+  // (تقرير عالق على نفس الفترة، ما يقبل تبديل بصفحات المؤشرات/سجل
+  // الحالات) — نحسب الفترة محليًا ونمرّرها مباشرة كباراميتر للدالتين،
+  // بدون أي كتابة على أي حقل مشترك بالصفحة كليًا. حل معزول بالكامل يقطع
+  // احتمال أي تسرّب حالة بين الصفحات من الجذر.
   const hubFromEl = document.getElementById('printhub-from');
   const hubToEl = document.getElementById('printhub-to');
+  let hubRange = null;
   if (hubFromEl && hubFromEl.value && hubToEl && hubToEl.value) {
-    const reportPeriodEl = document.getElementById('reportPeriod');
-    const reportFromEl = document.getElementById('reportDateFrom');
-    const reportToEl = document.getElementById('reportDateTo');
-    if (reportPeriodEl) reportPeriodEl.value = 'custom';
-    if (reportFromEl) reportFromEl.value = hubFromEl.value;
-    if (reportToEl) reportToEl.value = hubToEl.value;
+    const from = new Date(hubFromEl.value + 'T00:00:00');
+    const to = new Date(hubToEl.value + 'T00:00:00');
+    if (!isNaN(from.getTime()) && !isNaN(to.getTime()) && to >= from) hubRange = { from, to };
   }
-  generateReport();
-  generateDetailedReport();
+  generateReport(false, hubRange);
+  generateDetailedReport(false, hubRange);
   scheduleAutoPushFromReportScan();
 }
-function generateReport(autoRefresh) {
+function generateReport(autoRefresh, overrideRange) {
   lastReportView = 'quick';
   const period   = document.getElementById('reportPeriod').value;
-  const range    = resolveReportRange(period);
+  const range    = overrideRange || resolveReportRange(period);
   const statusEl = document.getElementById('report-status');
   const fmt = d => fmtDateLocalized(d);
 
