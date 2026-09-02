@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.10.3</span>
+  <span id="app-version">الإصدار 8.10.7</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -5255,8 +5255,8 @@ const MODULES = {
     holdingResultHeader: 'Mammogram (Positive, Negative)',
     holdingDateHeader: 'Mammogram Date',
     holdingSecondDateHeader: 'FNA Date',
-    holdingFileName: 'ملف_الصحة_القابضة_BreastCancer.xlsx',
-    ministryFileName: 'ملف_الوزارة_الشهري_Screened_Recall.xlsx'
+    holdingFileName: 'Holding-Health-File_BreastCancer.xlsx',
+    ministryFileName: 'Ministry-Monthly-File_Breast_Screened-Recall.xlsx'
   },
   colon: {
     key: 'colon',
@@ -5295,8 +5295,8 @@ const MODULES = {
     holdingResultHeader: 'Fit test result (Positive, Negative)',
     holdingDateHeader: 'Positive fit Date',
     holdingSecondDateHeader: 'Colonoscopy Date',
-    holdingFileName: 'ملف_الصحة_القابضة_CRC.xlsx',
-    ministryFileName: 'ملف_الوزارة_الشهري_القولون_Screened_Recall.xlsx'
+    holdingFileName: 'Holding-Health-File_CRC.xlsx',
+    ministryFileName: 'Ministry-Monthly-File_Colon_Screened-Recall.xlsx'
   }
 };
 let currentModule = 'breast';
@@ -5318,12 +5318,56 @@ function modLabel(moduleKey) {
 // filenames; plain ASCII sidesteps that entirely regardless of platform.
 // The PDF's CONTENT stays fully Arabic — only the suggested filename
 // changes.
+// ─── اسم المستشفى بصيغة إنجليزية آمنة لأسماء الملفات ────────────────────
+// نفس منطق asciiModLabel أدناه — أسماء المستشفيات عربية بالكود
+// (REPORT_HOSPITALS_BREAST/COLON)، فتحتاج مقابل ASCII صريح كمان.
+const HOSPITAL_ASCII_NAMES = {
+  'الدرعية': 'Diriyah', 'الدوادمي': 'Dawadmi', 'شقراء': 'Shaqra',
+  'حريملاء': 'Huraymila', 'عفيف': 'Afif', 'البجادية': 'Bijadiyah',
+  'ساجر': 'Sajir', 'ثادق': 'Thadiq', 'مرات': 'Muraat',
+};
+function asciiHospitalName(name) {
+  return HOSPITAL_ASCII_NAMES[name] || String(name || '').replace(/[^\w\-]+/g, '-').replace(/-+/g, '-') || 'Hospital';
+}
 function asciiModLabel(moduleKey) {
+  // بناء على طلب صريح: أي جلسة/عملية مرتبطة بمستشفى وحد فقط (عفيف
+  // المقيَّدة تحديدًا) يصير اسم الملف باسم المستشفى نفسه بدل اسم الوحدة
+  // العام — "Afif" بدل "Breast"، مثلًا. باقي الجلسات (الوصول الكامل)
+  // تبقى باسم الوحدة زي ما كانت، لأن أغلب تقاريرها تغطي عدة مستشفيات
+  // دفعة وحدة، فاسم مستشفى وحد ما يكون دقيقًا لها.
+  if (afifRestrictedMode) return asciiHospitalName(RESTRICTED_HOSPITAL);
   const key = moduleKey || currentModule;
   return key === 'breast' ? 'Breast' : 'Colon';
 }
+// ─── أسماء ملفات إكسل آمنة (ASCII بحت) ──────────────────────────────────
+// نفس السبب الموثَّق أعلى بـasciiModLabel — بس كان مطبَّقًا على أسماء
+// ملفات الطباعة (PDF) بس، مو ملفات إكسل. أغلب أسماء ملفات إكسل بالتطبيق
+// كانت تحتوي نص عربي مباشر (إما حرفيًا، أو عبر modLabel()/t() اللي
+// يرجعون عربي بالوضع العربي) — نفس مشكلة "الملف ما يفتح إطلاقًا" على
+// بعض متصفحات/تطبيقات الجوال. مؤكَّد كحالة واقعية حقيقية (بلاغ مباشر).
+// هذي خريطة مقابلات إنجليزية ثابتة لكل مفتاح ترجمة يُستخدم بأسماء
+// الملفات تحديدًا — محتوى الملف نفسه يبقى عربي بالكامل، بس اسم الملف
+// المقترح يصير ASCII بحت بغض النظر عن لغة الواجهة المفعّلة.
+function asciiFileLabel(key) {
+  const map = {
+    b0CasesLbl: 'B0-Cases', fromWord: 'From', toWord: 'To', untilWord: 'Until',
+    allPeriodsFileWord: 'All-Periods', dataEntryErrorsReportTitle: 'Data-Entry-Errors',
+    duplicateCheckResultsFileName: 'Duplicate-Cases', positiveCasesLogFileName: 'Positive-Cases-Log',
+    auditFileLbl: 'Audit-File', positiveCasesLbl: 'Positive-Cases', detailedReportFileName: 'Detailed-Report',
+    reportSheetNameLbl: 'Performance-Report', performanceWord: 'Performance', dedupedFileName: 'Deduped-Data',
+    btnPrintOverdueCases: 'Overdue-Cases',
+  };
+  return map[key] || key;
+}
 function buildSafePrintFilename(parts) {
   return parts.filter(Boolean).join('_').replace(/[^\w\-]+/g, '-').replace(/-+/g, '-');
+}
+// ─── حفظ ملف إكسل بصيغة .xlsx حقيقية صراحة (بدل الاعتماد الضمني على
+// امتداد الاسم) — يضمن دائمًا ملف OOXML حقيقي قابل للفتح على أي جهاز/
+// برنامج، بغض النظر عن أي التباس. استُخدمت هذي الدالة بدل استدعاء
+// XLSX.writeFile مباشرة بكل مكان بالتطبيق.
+function xlsxSave(wb, filename) {
+  XLSX.writeFile(wb, filename, { bookType: 'xlsx', type: 'array' });
 }
 // Shared display-date formatter. Arabic mode keeps the existing
 // day/month/year numeric format (with forced Latin digits — 'ar-SA' alone
@@ -6069,7 +6113,7 @@ function exportB0Excel() {
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, t('b0CasesLbl'));
-  XLSX.writeFile(wb, `${t('b0CasesLbl')}_${t('fromWord')}_${dFrom}_${t('toWord')}_${dTo}.xlsx`);
+  xlsxSave(wb, `${asciiFileLabel('b0CasesLbl')}_${asciiFileLabel('fromWord')}_${dFrom}_${asciiFileLabel('toWord')}_${dTo}.xlsx`);
 }
 
 // ─── Print Hub: consolidates every print button in the app in one place,
@@ -6729,7 +6773,16 @@ function computeModuleAchievement(moduleKey, range, periodKind) {
   const pct = totalTarget ? Math.round((totalAchieved / totalTarget) * 100) : 0;
   return { totalTarget, totalAchieved, pct, perHospital };
 }
-const ringColorByPct = pct => pct >= 90 ? 'var(--success)' : (pct >= 70 ? 'var(--warn)' : 'var(--danger)');
+// ─── ألوان الحلقات المئوية — قيم ثابتة صريحة (مو متغيرات CSS) ──────────
+// كانت تعتمد على var(--success)/var(--warn)/var(--danger) — قيمتها
+// تتغيّر حسب الوضع الفاتح/الداكن/عالي التباين المفعّل بالواجهة وقتها.
+// أثناء الطباعة الفعلية أحيانًا ما تنحل هالمتغيرات صح (قيد رسم معروف
+// بمحركات الطباعة مع متغيرات CSS)، فيرجع اللون لقيمة افتراضية قديمة
+// بدل اللون الصحيح المطابق للنسبة. مؤكَّد كحالة واقعية حقيقية (بلاغ
+// مباشر: ألوان المؤشرات بالطباعة تطلع قديمة). القيم هنا ثابتة صراحة
+// عشان تضمن نفس اللون الصحيح دائمًا بالطباعة، بغض النظر عن أي وضع
+// مفعّل بالشاشة وقتها.
+const ringColorByPct = pct => pct >= 90 ? '#15803D' : (pct >= 70 ? '#B45309' : '#C81E1E');
 const indKpiBox = (num, lbl) => `
     <div class="ind-stat-box">
       <div class="ind-stat-num">${num}</div>
@@ -7185,7 +7238,7 @@ function compareCustomPeriods() {
   const pctB = b.target ? Math.round((b.achieved / b.target) * 100) : 0;
 
   const fmt = d => fmtDateLocalized(d);
-  const pctColorFor = pct => pct < 85 ? 'var(--danger)' : (pct <= 95 ? 'var(--warn)' : 'var(--success)');
+  const pctColorFor = pct => pct < 85 ? '#C81E1E' : (pct <= 95 ? '#B45309' : '#15803D');
   const side = (label, color, range, r, pct) => `
     <div style="flex:1; background:var(--bg); border:1px solid var(--border); border-top:3px solid ${color}; border-radius:10px; padding:12px">
       <div style="font-size:10.5px; font-weight:700; color:${color}; margin-bottom:2px">${esc(label)}</div>
@@ -7349,7 +7402,7 @@ function buildForecastHtml(range) {
 
   const rows = bands.map(b => {
     const pct = target > 0 ? Math.round((b.projected / target) * 100) : null;
-    const color = pct === null ? 'var(--muted)' : (pct < 85 ? 'var(--danger)' : (pct <= 95 ? 'var(--warn)' : 'var(--success)'));
+    const color = pct === null ? 'var(--muted)' : (pct < 85 ? '#C81E1E' : (pct <= 95 ? '#B45309' : '#15803D'));
     // Icon + word, not just color — a colorblind user (or anyone glancing
     // quickly) still gets an unambiguous signal either way.
     const statusIcon = pct === null ? ''
@@ -7469,7 +7522,7 @@ function buildFacilityBreakdownHtml(range) {
   const row = (label, n, targetKey) => {
     const target = targetKey ? ((targets[targetKey] || {})[targetPeriodKey] || 0) : 0;
     const pct = target > 0 ? Math.round((n / target) * 100) : null;
-    const color = pct === null ? 'var(--muted)' : (pct < 85 ? 'var(--danger)' : (pct <= 95 ? 'var(--warn)' : 'var(--success)'));
+    const color = pct === null ? 'var(--muted)' : (pct < 85 ? '#C81E1E' : (pct <= 95 ? '#B45309' : '#15803D'));
     return `
     <div style="margin-bottom:16px">
       <div style="display:flex; justify-content:space-between; align-items:baseline; font-size:11.5px; line-height:1.6; margin-bottom:6px">
@@ -9512,7 +9565,7 @@ function exportColonMonthlyMinistryFile(cases, range, hospitalsUsed, duplicatesR
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(screenedAoa), 'Screend cases');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(positiveAoa), 'Positive cases');
-  XLSX.writeFile(wb, MOD().ministryFileName);
+  xlsxSave(wb, MOD().ministryFileName);
 
   statusEl.style.color = 'var(--success)';
   statusEl.textContent = t('ministryFileCreated').replace('{module}', modLabel()).replace('{n}', hospitalsUsed).replace('{from}', fmt(range.from)).replace('{to}', fmt(range.to))
@@ -9625,7 +9678,7 @@ function exportTemplateFromReport() {
   });
   XLSX.utils.book_append_sheet(wb, screenedWs, 'Screened cases');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(recallAoa), 'Recall');
-  XLSX.writeFile(wb, MOD().ministryFileName);
+  xlsxSave(wb, MOD().ministryFileName);
 
   const posLabel = MOD().isDigitCategory ? t('positiveBiradLabel') : t('positiveResultLabel');
   statusEl.style.color = 'var(--success)';
@@ -9832,7 +9885,7 @@ function exportQuarterlyMinistryFileInner(statusEl, fmt) {
   XLSX.utils.book_append_sheet(wb, ws, 'Breast Cancer Quarterly');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(listsAoa), 'Lists');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(notesAoa), 'Notes');
-  XLSX.writeFile(wb, `Breast_Cancer_Quarterly_${fmt(range.from)}_${t('toWord')}_${fmt(range.to)}.xlsx`);
+  xlsxSave(wb, `Breast_Cancer_Quarterly_${fmt(range.from)}_${asciiFileLabel('toWord')}_${fmt(range.to)}.xlsx`);
 
   statusEl.style.color = 'var(--success)';
   const matchedCount = positiveCases.filter(c => logByNum.has(c.num)).length;
@@ -10009,7 +10062,7 @@ function exportQuarterlyColonFileInner(statusEl, fmt) {
   XLSX.utils.book_append_sheet(wb, ws, 'Colorectal Cancer Quarterly');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(listsAoa), 'Lists');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(notesAoa), 'Notes');
-  XLSX.writeFile(wb, `Colorectal_Cancer_Quarterly_${fmt(range.from)}_${t('toWord')}_${fmt(range.to)}.xlsx`);
+  xlsxSave(wb, `Colorectal_Cancer_Quarterly_${fmt(range.from)}_${asciiFileLabel('toWord')}_${fmt(range.to)}.xlsx`);
 
   statusEl.style.color = 'var(--success)';
   const matchedCount = positiveCases.filter(c => logByNum.has(c.num)).length;
@@ -10098,7 +10151,7 @@ function exportHoldingHealthFile() {
     }
   });
   XLSX.utils.book_append_sheet(wb, hhcWs, m.holdingSheetName);
-  XLSX.writeFile(wb, m.holdingFileName);
+  xlsxSave(wb, m.holdingFileName);
 
   statusEl.style.color = 'var(--success)';
   const posLabel2 = m.isDigitCategory ? t('positiveBiradLabel') : t('positiveResultLabel');
@@ -11385,7 +11438,7 @@ function exportBulkDataErrorsExcel() {
   if (narrative) {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{ [t('narrativeSectionTitle')]: narrative }]), t('narrativeSheetName'));
   }
-  XLSX.writeFile(wb, `${t('dataEntryErrorsReportTitle')}_${modLabel()}.xlsx`);
+  xlsxSave(wb, `${asciiModLabel()}_${asciiFileLabel('dataEntryErrorsReportTitle')}.xlsx`);
 }
 
 let bulkDateInfo = null; // { outOfRange, unparseableDate, range } when date filtering was applied
@@ -11791,8 +11844,8 @@ function exportBulkResults() {
   const wb = XLSX.utils.book_new();
   const filterLabel = BULK_FILTER_LABELS_FN()[bulkFilter] || bulkFilter;
   XLSX.utils.book_append_sheet(wb, ws, filterLabel.slice(0, 31)); // Excel sheet-name limit
-  const filterSuffix = bulkFilter === 'all' ? '' : `_${filterLabel}`;
-  XLSX.writeFile(wb, `${t('duplicateCheckResultsFileName')}_${modLabel()}${filterSuffix}.xlsx`);
+  const filterSuffix = bulkFilter === 'all' ? '' : `_${bulkFilter}`;
+  xlsxSave(wb, `${asciiModLabel()}_${asciiFileLabel('duplicateCheckResultsFileName')}${filterSuffix}.xlsx`);
 }
 
 // Generic: removes duplicate rows from ANY uploaded sheet (keeps the first
@@ -11824,7 +11877,7 @@ function dedupeAndDownload(sheet, idColIdx, statusElId, filename) {
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, t('cleanDataLbl'));
-  XLSX.writeFile(wb, filename);
+  xlsxSave(wb, filename);
 
   statusEl.style.color = 'var(--success)';
   const parts = [];
@@ -11836,7 +11889,7 @@ function dedupeAndDownload(sheet, idColIdx, statusElId, filename) {
 }
 
 function downloadDedupedFile() {
-  dedupeAndDownload(pendingBulkSheet, bulkIdColIdx, 'dedup-status', `${t('dedupedFileName')}.xlsx`);
+  dedupeAndDownload(pendingBulkSheet, bulkIdColIdx, 'dedup-status', `${asciiFileLabel('dedupedFileName')}.xlsx`);
 }
 // Cleans the STORED audit file (not an uploaded sheet) in one pass:
 //  1. Removes IDs that aren't the shape of a Saudi national/Iqama ID (9–10 digits)
@@ -11951,7 +12004,7 @@ function exportPositiveLogExcel() {
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, t('positiveCasesLbl'));
-  XLSX.writeFile(wb, `${t('positiveCasesLogFileName')}_${modLabel()}_${periodFileSuffix(fromDt, toDt)}.xlsx`);
+  xlsxSave(wb, `${asciiModLabel()}_${asciiFileLabel('positiveCasesLogFileName')}_${periodFileSuffix(fromDt, toDt)}.xlsx`);
 }
 
 function downloadCurrentAuditExcel() {
@@ -11965,7 +12018,7 @@ function downloadCurrentAuditExcel() {
   const today2 = new Date();
   const pad2 = n => String(n).padStart(2, '0');
   const todayStr2 = `${pad2(today2.getDate())}-${pad2(today2.getMonth()+1)}-${today2.getFullYear()}`;
-  XLSX.writeFile(wb, `${t('auditFileLbl')} ${modLabel()} ${todayStr2}.xlsx`);
+  xlsxSave(wb, `${asciiModLabel()}_${asciiFileLabel('auditFileLbl')}_${todayStr2}.xlsx`);
 }
 
 function downloadCleanedAuditFile() {
@@ -11980,7 +12033,7 @@ function downloadCleanedAuditFile() {
   const pad = n => String(n).padStart(2, '0');
   const todayStr = `${pad(today.getDate())}-${pad(today.getMonth()+1)}-${today.getFullYear()}`;
   const moduleName = modLabel(lastCleanedAuditSnapshot.moduleKey); // "أورام الثدي" / "أورام القولون"
-  XLSX.writeFile(wb, `${t('auditFileLbl')} ${moduleName} ${todayStr}.xlsx`);
+  xlsxSave(wb, `${asciiModLabel(lastCleanedAuditSnapshot.moduleKey)}_${asciiFileLabel('auditFileLbl')}_${todayStr}.xlsx`);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -13475,10 +13528,10 @@ function monthKeyOf(e) {
 // used so every exported/printed file's name says exactly what it covers.
 function periodFileSuffix(fromDt, toDt) {
   const d2s = d => d.toISOString().slice(0, 10);
-  if (!fromDt && !toDt) return t('allPeriodsFileWord');
-  if (fromDt && toDt) return `${t('fromWord')}_${d2s(fromDt)}_${t('toWord')}_${d2s(toDt)}`;
-  if (fromDt) return `${t('fromWord')}_${d2s(fromDt)}`;
-  return `${t('untilWord')}_${d2s(toDt)}`;
+  if (!fromDt && !toDt) return asciiFileLabel('allPeriodsFileWord');
+  if (fromDt && toDt) return `${asciiFileLabel('fromWord')}_${d2s(fromDt)}_${asciiFileLabel('toWord')}_${d2s(toDt)}`;
+  if (fromDt) return `${asciiFileLabel('fromWord')}_${d2s(fromDt)}`;
+  return `${asciiFileLabel('untilWord')}_${d2s(toDt)}`;
 }
 function getPositiveLogPeriodFilter() {
   const fromVal = document.getElementById('positive-log-filter-from')?.value;
@@ -13644,9 +13697,9 @@ function exportOverdueCasesExcel() {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), t('kpiIncomplete'));
-  const scopeSuffix = !isAllScope ? `_${hospitalDisplayName(hospitalScope)}` : '';
+  const scopeSuffix = !isAllScope ? `_${asciiHospitalName(hospitalScope)}` : '';
   const dstr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `${t('btnPrintOverdueCases').replace('⏰ ', '').replace(/^طباعة\s+/, '').replace(/^Print\s+/i, '')}_${modLabel()}${scopeSuffix}_${dstr}.xlsx`);
+  xlsxSave(wb, `${asciiModLabel()}${scopeSuffix}_${asciiFileLabel('btnPrintOverdueCases')}_${dstr}.xlsx`);
 }
 function printOverdueCasesReport(skipPrint, explicitHospitalScope) {
   if (currentModule === 'colon') { try { reconcileUnmatchedColonCases(); } catch (e) { console.error('reconcile before print failed', e); } }
@@ -13867,7 +13920,7 @@ function exportPositiveCombinedExcel() {
   const wsDetail = XLSX.utils.json_to_sheet(detailRows);
   XLSX.utils.book_append_sheet(wb, wsDetail, t('btnExportResults'));
 
-  XLSX.writeFile(wb, `${t('positiveCasesLbl').replace(/ /g, '_')}_${modLabel()}_${periodFileSuffix(fromDt, toDt)}.xlsx`);
+  xlsxSave(wb, `${asciiModLabel()}_${asciiFileLabel('positiveCasesLbl')}_${periodFileSuffix(fromDt, toDt)}.xlsx`);
 }
 
 function computeCaseStatus(e) {
@@ -15880,12 +15933,12 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
     ${buildPrintBrandHeaderHtml(t('dashTitle') + ' — ' + modLabel() + titleSuffix, periodLabel)}
     <div style="display:flex; align-items:center; gap:20px; border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:12px; background:var(--surface)">
       <div style="display:flex; gap:14px">
-        ${donutSvg(s.pct14, { size: 66, stroke: 8, ringColor: s.pct14 >= 90 ? 'var(--success)' : (s.pct14 >= 70 ? 'var(--warn)' : 'var(--danger)'), trackColor: 'var(--border)', textColor: 'var(--text)' })}
-        ${donutSvg(pctClosed, { size: 66, stroke: 8, ringColor: pctClosed >= 90 ? 'var(--success)' : (pctClosed >= 70 ? 'var(--warn)' : 'var(--danger)'), trackColor: 'var(--border)', textColor: 'var(--text)' })}
+        ${donutSvg(s.pct14, { size: 66, stroke: 8, ringColor: ringColorByPct(s.pct14), trackColor: 'var(--border)', textColor: 'var(--text)' })}
+        ${donutSvg(pctClosed, { size: 66, stroke: 8, ringColor: ringColorByPct(pctClosed), trackColor: 'var(--border)', textColor: 'var(--text)' })}
       </div>
       <div style="display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--muted)">
-        <div style="display:flex; align-items:center; gap:6px"><span style="width:8px; height:8px; border-radius:50%; background:${s.pct14 >= 90 ? 'var(--success)' : (s.pct14 >= 70 ? 'var(--warn)' : 'var(--danger)')}"></span>${t('within')} ${BIOPSY_DEADLINE_DAYS[currentModule]} ${t('days')}</div>
-        <div style="display:flex; align-items:center; gap:6px"><span style="width:8px; height:8px; border-radius:50%; background:${pctClosed >= 90 ? 'var(--success)' : (pctClosed >= 70 ? 'var(--warn)' : 'var(--danger)')}"></span>${t('closedCasesLbl')}</div>
+        <div style="display:flex; align-items:center; gap:6px"><span style="width:8px; height:8px; border-radius:50%; background:${ringColorByPct(s.pct14)}"></span>${t('within')} ${BIOPSY_DEADLINE_DAYS[currentModule]} ${t('days')}</div>
+        <div style="display:flex; align-items:center; gap:6px"><span style="width:8px; height:8px; border-radius:50%; background:${ringColorByPct(pctClosed)}"></span>${t('closedCasesLbl')}</div>
       </div>
     </div>
     <div class="dr-print-only" style="text-align:center; font-weight:800; font-size:15px; padding:10px; margin-bottom:12px; border:2px solid var(--accent); border-radius:10px">
@@ -15903,7 +15956,7 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
       ${kpi(s.closed, t('kpiClosed'))}
       ${kpi(s.total - s.closed, t('kpiIncomplete'), 'var(--danger)')}
       ${kpi(s.within14, `${t('within')} ${BIOPSY_DEADLINE_DAYS[currentModule]} ${t('days')}`)}
-      ${kpi(s.pct14 + '%', t('kpiAchievementPct'), s.pct14 >= 90 ? 'var(--success)' : (s.pct14 >= 70 ? 'var(--warn)' : 'var(--danger)'))}
+      ${kpi(s.pct14 + '%', t('kpiAchievementPct'), ringColorByPct(s.pct14))}
       ${kpi(s.withBiopsy, t('kpiWithBiopsy'))}
       ${kpi(s.withPlan, t('kpiWithPlan'))}
       ${kpi(s.cancer, t('kpiCancer'), 'var(--danger)')}
@@ -18026,7 +18079,7 @@ function renderZoneReport(results, periodLabel, logoSrc) {
 
     const hospitalsHtml = zoneHospitals.map(r => {
       const pct = r.target > 0 ? Math.round(r.achieved / r.target * 100) : 0;
-      const gaugeColor = pct >= 96 ? 'var(--success)' : (pct >= 85 ? 'var(--warn)' : 'var(--danger)');
+      const gaugeColor = pct >= 96 ? '#15803D' : (pct >= 85 ? '#B45309' : '#C81E1E');
       return `
         <div class="hosp-mini-card" data-hospital="${esc(r.name)}">
           <div class="hosp-mini-title">${currentLang === 'en' ? esc(hospitalDisplayName(r.name)) : 'مستشفى ' + esc(r.name)}</div>
@@ -19149,7 +19202,7 @@ function exportDetailedReportExcel() {
   }
 
   XLSX.utils.book_append_sheet(wb, ws, t('detailedReportTitle'));
-  XLSX.writeFile(wb, `${t('detailedReportFileName')}_${modLabel()}.xlsx`);
+  xlsxSave(wb, `${asciiModLabel()}_${asciiFileLabel('detailedReportFileName')}.xlsx`);
 }
 
 // Single entry point for the "🖨 عرض التقارير" button — generates both the
@@ -19166,6 +19219,24 @@ async function generateBothReports() {
         new Promise(resolve => setTimeout(resolve, 45000)), // never let this hang the report button forever
       ]);
     } catch (e) { /* continue with whatever is loaded even if Drive refresh fails */ }
+  }
+  // بناء على طلب صريح: زر "عرض التقارير" هنا بصفحة "مركز الطباعة"، لكن
+  // generateReport()/generateDetailedReport() كانتا تتحققان من حقول
+  // تاريخ صفحة "تقرير الأداء" الثانية (reportPeriod/reportDateFrom/
+  // reportDateTo) — فحتى لو حددت الفترة صح بحقول هذي الصفحة (printhub-
+  // from/to)، الدالتين تفحصان حقول فاضية بصفحة ثانية وتظهر "حدد فترة
+  // صحيحة أولاً" رغم إنك فعلًا حددتها. نفس نمط الخلل الموثَّق سابقًا
+  // بأزرار طباعة ثانية بنفس الصفحة. الحل: مزامنة حقول هذي الصفحة لحقول
+  // صفحة "تقرير الأداء" قبل استدعاء الدالتين.
+  const hubFromEl = document.getElementById('printhub-from');
+  const hubToEl = document.getElementById('printhub-to');
+  if (hubFromEl && hubFromEl.value && hubToEl && hubToEl.value) {
+    const reportPeriodEl = document.getElementById('reportPeriod');
+    const reportFromEl = document.getElementById('reportDateFrom');
+    const reportToEl = document.getElementById('reportDateTo');
+    if (reportPeriodEl) reportPeriodEl.value = 'custom';
+    if (reportFromEl) reportFromEl.value = hubFromEl.value;
+    if (reportToEl) reportToEl.value = hubToEl.value;
   }
   generateReport();
   generateDetailedReport();
@@ -19377,7 +19448,7 @@ function generateReport(autoRefresh) {
   const arc = document.getElementById('gauge-arc');
   const gaugePct = Math.min(100, totalPct);
   arc.style.strokeDashoffset = String(314 - (314 * gaugePct / 100));
-  arc.style.stroke = totalPct < 85 ? 'var(--danger)' : (totalPct <= 95 ? 'var(--warn)' : 'var(--success)');
+  arc.style.stroke = totalPct < 85 ? '#C81E1E' : (totalPct <= 95 ? '#B45309' : '#15803D');
   document.getElementById('gauge-text').textContent = totalPct + '%';
   document.getElementById('kpi-unified-pct').textContent = totalPct + '%';
 
@@ -19703,7 +19774,7 @@ function exportDataEntryErrorsReport() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(narrativeRows), t('narrativeSheetName'));
   }
   const fmt = d => fmtDateLocalized(d);
-  XLSX.writeFile(wb, `${t('dataEntryErrorsReportTitle')}_${modLabel()}_${fmt(range.from)}_${t('toWord')}_${fmt(range.to)}.xlsx`);
+  xlsxSave(wb, `${asciiModLabel()}_${asciiFileLabel('dataEntryErrorsReportTitle')}_${fmt(range.from)}_${asciiFileLabel('toWord')}_${fmt(range.to)}.xlsx`);
 }
 // Turns the raw per-hospital error counts into a plain-language paragraph
 // — e.g. "الدرعية: يوجد 12 حالة بتاريخ غير مسجّل بعمود 'Date of receiving
@@ -20107,7 +20178,7 @@ function exportAllUnreadableDatesExcel() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forSheet), 'تاريخ غير مقروء');
   const dstr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `تاريخ_غير_مقروء_${modLabel()}_${dstr}.xlsx`);
+  xlsxSave(wb, `${asciiModLabel()}_Unreadable-Dates_${dstr}.xlsx`);
 }
 function printDataEntryErrorsReport(skipPrint) {
   const period = document.getElementById('reportPeriod').value;
@@ -20312,7 +20383,7 @@ function exportReportExcludedRowsExcel() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totalsForSheet), 'الإجمالي لكل مستشفى');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(excludedForSheet.length ? excludedForSheet : [{ 'ملاحظة': 'لا توجد سجلات مستبعدة بهذه الفترة' }]), 'السجلات المستبعدة');
   const fmt = d => fmtDateLocalized(d);
-  XLSX.writeFile(wb, `ملاحظات_التقرير_${modLabel()}_${fmt(range.from)}_${t('toWord')}_${fmt(range.to)}.xlsx`);
+  xlsxSave(wb, `${asciiModLabel()}_Report-Notes_${fmt(range.from)}_${asciiFileLabel('toWord')}_${fmt(range.to)}.xlsx`);
 }
 
 // Same data as the Excel export, formatted as an on-page table and sent to
@@ -20636,7 +20707,7 @@ function exportCorrectedDatesExcel() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forSheet), 'التواريخ المصححة');
   const dstr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `التواريخ_المصححة_${modLabel()}_${dstr}.xlsx`);
+  xlsxSave(wb, `${asciiModLabel()}_Corrected-Dates_${dstr}.xlsx`);
 }
 function printReportExcludedRows(skipPrint) {  const period = document.getElementById('reportPeriod').value;
   const range = resolveReportRange(period);
@@ -20961,7 +21032,8 @@ function exportReportExcel() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, t('reportSheetNameLbl'));
   const names = { week: t('weeklyWord'), month: t('monthlyWord'), custom: t('customPeriodWord') };
-  XLSX.writeFile(wb, `${t('reportSheetNameLbl')}_${MOD().key}_${names[period] || t('performanceWord')}.xlsx`);
+  const namesAscii = { week: 'Weekly', month: 'Monthly', custom: 'Custom-Period' };
+  xlsxSave(wb, `${asciiFileLabel('reportSheetNameLbl')}_${MOD().key}_${(namesAscii[period] || asciiFileLabel('performanceWord'))}.xlsx`);
 }
 
 function showHelpModal() {
