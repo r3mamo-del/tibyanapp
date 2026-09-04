@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.10.9</span>
+  <span id="app-version">الإصدار 8.11.2</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -9530,8 +9530,8 @@ function exportColonMonthlyMinistryFile(cases, range, hospitalsUsed, duplicatesR
     // 'male' inside it (fe-MALE) — checking male first meant EVERY
     // female case was being misclassified as MALE, since the male
     // pattern matched before the code ever reached the female check.
-    if (s.includes('female') || s.includes('أنث') || s.includes('انث') || s === 'f') return 'FEMALE';
-    if (s.includes('male') || s.includes('ذكر') || s === 'm') return 'MALE';
+    if (s.includes('female') || s.includes('أنث') || s.includes('انث') || s === 'f') return 'Female';
+    if (s.includes('male') || s.includes('ذكر') || s === 'm') return 'Male';
     return '';
   }
 
@@ -9543,16 +9543,16 @@ function exportColonMonthlyMinistryFile(cases, range, hospitalsUsed, duplicatesR
   const clearResultCases = cases.filter(c => c.category === 'positive' || c.category === 'negative');
 
   const screenedRows = clearResultCases.map(c => [
-    cleanDate(c), 'Ministry of Health', 'Hospital', c.num, normalizeGender(c.gender),
-    'Average Risk', c.age ?? '', 'Aged 45-75 years', 'Fit', cleanDate(c), cleanDate(c), cleanDate(c),
-    c.category === 'positive' ? 'POSITIVE' : 'NEGATIVE', CLUSTER_NAME, '',
+    cleanDate(c), 'Moh', 'Hospital', c.num, normalizeGender(c.gender),
+    'Average Risk', c.age ?? '', 'Aged 45-75 years', 'Fecal immunochemical test (FIT)', cleanDate(c), cleanDate(c), cleanDate(c),
+    c.category === 'positive' ? 'Positive' : 'Negative', CLUSTER_NAME, '',
   ]);
   // بناء على طلب صريح: الحالات المستبعدة بسبب عمر غير مطابق أو غير
   // مدرَج تُضاف هنا بعمود ملاحظة يوضّح السبب — بدل استبعادها كليًا.
   (ageExcludedCases || []).forEach(c => {
     screenedRows.push([
-      cleanDate(c), 'Ministry of Health', 'Hospital', c.num, normalizeGender(c.gender),
-      'Average Risk', c.age ?? '', 'Aged 45-75 years', 'Fit', cleanDate(c), cleanDate(c), cleanDate(c),
+      cleanDate(c), 'Moh', 'Hospital', c.num, normalizeGender(c.gender),
+      'Average Risk', c.age ?? '', 'Aged 45-75 years', 'Fecal immunochemical test (FIT)', cleanDate(c), cleanDate(c), cleanDate(c),
       '', CLUSTER_NAME, c.age === null ? t('noteAgeMissing') : t('noteAgeOutside'),
     ]);
   });
@@ -9570,8 +9570,8 @@ function exportColonMonthlyMinistryFile(cases, range, hospitalsUsed, duplicatesR
     const treatedNoReason = (treatedAtCluster === 'No' && logEntry) ? (logEntry.notes || '') : '';
     const treatmentStartDate = logEntry ? extractTreatmentStartDate(logEntry) : '';
     return [
-      cleanDate(c), 'Ministry of Health', 'Hospital', c.num, normalizeGender(c.gender),
-      'Average Risk', c.age ?? '', 'Aged 45-75 years', 'Fit', cleanDate(c), cleanDate(c), cleanDate(c), 'POSITIVE', cleanDate(c),
+      cleanDate(c), 'Moh', 'Hospital', c.num, normalizeGender(c.gender),
+      'Average Risk', c.age ?? '', 'Aged 45-75 years', 'Fecal immunochemical test (FIT)', cleanDate(c), cleanDate(c), cleanDate(c), 'Positive', cleanDate(c),
       endoscopyDone, endoscopyNoReason, endoscopyDate, endoscopyResult, biopsyTaken, biopsyResult,
       cancerStage, treatedAtCluster, treatedNoReason, treatmentStartDate, CLUSTER_NAME,
     ];
@@ -9671,9 +9671,9 @@ function exportTemplateFromReport() {
     // mammography result" are all populated with the SAME value as "Date of
     // mammography screening" (we only track one screening date; the other
     // three date fields mirror it).
-    screenedRows.push([cleanDateStr, 'Ministry of Health', c.num, 'Average', age, 'Woman aged 40-69 years', 'Hospital', cleanDateStr, cleanDateStr, cleanDateStr, biradLabel, CLUSTER_NAME, note]);
+    screenedRows.push([cleanDateStr, 'Moh', c.num, 'Average', age, 'Woman aged 40-69 years', 'Hospital', cleanDateStr, cleanDateStr, cleanDateStr, biradLabel, CLUSTER_NAME, note]);
     if (isPositiveCategory(c.category)) {
-      recallRows.push([cleanDateStr, 'Ministry of Health', c.num, 'Average', age, 'Woman aged 40-69 years', 'Hospital', cleanDateStr, cleanDateStr, cleanDateStr, biradLabel, '', '', '', '', '', CLUSTER_NAME, note]);
+      recallRows.push([cleanDateStr, 'Moh', c.num, 'Average', age, 'Woman aged 40-69 years', 'Hospital', cleanDateStr, cleanDateStr, cleanDateStr, biradLabel, '', '', '', '', '', CLUSTER_NAME, note]);
     }
   });
 
@@ -9852,7 +9852,7 @@ function exportQuarterlyMinistryFileInner(statusEl, fmt) {
     // into the long descriptive BI-RADS text — per explicit instruction.
     const biradRawCopy = c.biradRaw || c.category || '';
     return [
-      cleanDate(c), 'Ministry of Health', c.num, 'Average', c.age ?? '', 'Woman aged 40-69 years',
+      cleanDate(c), 'Moh', c.num, 'Average', c.age ?? '', 'Woman aged 40-69 years',
       'Hospital', cleanDate(c), cleanDate(c), cleanDate(c),
       biradRawCopy,
       recallDate, confirmedDiagDate, finalDiagnosis, cancerStage, treatedAtCluster, noReason, treatmentStartDate,
@@ -9874,7 +9874,7 @@ function exportQuarterlyMinistryFileInner(statusEl, fmt) {
 
   const listsAoa = [
     ['Sector','Risk group (Average/High)','Risk factor','Place of screening','BI-RADS Category','Final diagnosis','Cancer stage','Treated at the Cluster?'],
-    ['Ministry of Health','Average risk','Strong family history of breast or ovarian cancer (Relatives 1st or 2nd degree).','Hospital','BI-RADS 0: Incomplete','Negative','Stage0','Yes'],
+    ['Moh','Average risk','Strong family history of breast or ovarian cancer (Relatives 1st or 2nd degree).','Hospital','BI-RADS 0: Incomplete','Negative','Stage0','Yes'],
     ['Other Governmental Sector','High risk','Previous treatment with chest radiation at a young age (between age of 10-30).','Mobile clinic','BI-RADS 1: Negative','Breast Cancer','Stage1','No'],
     ['Private Sector','','Previous personal history of Breast cancer.','Women health clinic in mall','BI-RADS 2: Benign','Probably benign (need follow up)','Stage2',''],
     ['','','Previous history of suspicious breast biopsies (ADH,LN).','','BI-RADS 3: Probably benign','','Stage3',''],
@@ -10016,8 +10016,8 @@ function exportQuarterlyColonFileInner(statusEl, fmt) {
     // 'male' inside it (fe-MALE) — checking male first meant EVERY
     // female case was being misclassified as MALE, since the male
     // pattern matched before the code ever reached the female check.
-    if (s.includes('female') || s.includes('أنث') || s.includes('انث') || s === 'f') return 'FEMALE';
-    if (s.includes('male') || s.includes('ذكر') || s === 'm') return 'MALE';
+    if (s.includes('female') || s.includes('أنث') || s.includes('انث') || s === 'f') return 'Female';
+    if (s.includes('male') || s.includes('ذكر') || s === 'm') return 'Male';
     return '';
   }
 
@@ -10034,7 +10034,7 @@ function exportQuarterlyColonFileInner(statusEl, fmt) {
     const treatedNoReason = (treatedAtCluster === 'No' && logEntry) ? (logEntry.notes || '') : '';
     const treatmentStartDate = logEntry ? extractTreatmentStartDate(logEntry) : '';
     return [
-      cleanDate(c), 'Ministry of Health', 'Hospital', c.num, normalizeGender(c.gender), 'Average Risk', c.age ?? '', 'Aged 45-75 years',
+      cleanDate(c), 'Moh', 'Hospital', c.num, normalizeGender(c.gender), 'Average Risk', c.age ?? '', 'Aged 45-75 years',
       'Fecal immunochemical test (FIT)', cleanDate(c), cleanDate(c), cleanDate(c), 'Positive', cleanDate(c),
       endoscopyDone, endoscopyNoReason, endoscopyDate, endoscopyResult, biopsyTaken, biopsyResult,
       cancerStage, treatedAtCluster, treatedNoReason, treatmentStartDate, CLUSTER_CODE,
@@ -10052,7 +10052,7 @@ function exportQuarterlyColonFileInner(statusEl, fmt) {
 
   const listsAoa = [
     ['Sector','PHC/Hospital','Gender','Risk Group (Average/High)','Select the risk factor','Screening tool','Test result','Is endoscopy procedure has been done ?','Endoscopy result','Biopsy taken','Biopsy result','Cancer stage','Treated at the Cluster?'],
-    ['Ministry of Health','PHC','Male','Average risk','Personal history of CRC or Poylp','Fecal Occult Blood Test (FOBT)','Negative','Yes','Adenoma (Polyps)','Yes','Colorectal Cancer','Stage 0','Yes'],
+    ['Moh','PHC','Male','Average risk','Personal history of CRC or Poylp','Fecal Occult Blood Test (FOBT)','Negative','Yes','Adenoma (Polyps)','Yes','Colorectal Cancer','Stage 0','Yes'],
     ['Other Governmental Sector','Hospital','Female','High risk','Family history of CRC or Poylp','Fecal immunochemical test (FIT)','Positive','No','Suspected Cancer','No','Others','Stage 1','No'],
     ['Private Sector','','','','IBD','Colonoscopy','Unsatisfied/Rejected','','Normal','','','Stage 2',''],
     ['','','','','FAP','Sigmoidoscopy','','','Other(inflammation,hemorrhoid,Diverticulosis,fissuer)','','','Stage 3',''],
