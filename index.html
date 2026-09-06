@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.11.2</span>
+  <span id="app-version">الإصدار 8.11.4</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -18150,17 +18150,18 @@ function renderZoneReport(results, periodLabel, logoSrc) {
 // rather than replacing it.
 // Same logic as collectReportScanRows() but scoped to ONE hospital only —
 // powers the "per-hospital" detailed report view.
-function collectReportScanRowsForHospital(name, overrideRange, cachedAuditByNum) {
+function collectReportScanRowsForHospital(name, overrideRange, cachedAuditByNum, moduleKeyOverride) {
   const range = overrideRange || resolveReportRange(document.getElementById('reportPeriod').value);
   if (!range) return { error: 'range' };
 
   // نفس فكرة التخزين المؤقت أعلاه — هذي الدالة تُستدعى لكل مستشفى على
   // حدة بكل تقرير (5-9 استدعاءات فورية)، فتوفير الفحص المكرر هنا مهم
   // بنفس القدر.
-  const cacheKey = `${currentModule}|${name}|${range.from.getTime()}|${range.to.getTime()}|${dataGenerationCounter}`;
+  const effectiveModuleKey = moduleKeyOverride || currentModule;
+  const cacheKey = `${effectiveModuleKey}|${name}|${range.from.getTime()}|${range.to.getTime()}|${dataGenerationCounter}`;
   const cached = _collectReportScanRowsForHospitalCache.get(cacheKey);
   if (cached) return cached;
-  const result = collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum);
+  const result = collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum, effectiveModuleKey);
   _collectReportScanRowsForHospitalCache.set(cacheKey, result);
   if (_collectReportScanRowsForHospitalCache.size > 60) {
     _collectReportScanRowsForHospitalCache.delete(_collectReportScanRowsForHospitalCache.keys().next().value);
@@ -18168,20 +18169,29 @@ function collectReportScanRowsForHospital(name, overrideRange, cachedAuditByNum)
   return result;
 }
 const _collectReportScanRowsForHospitalCache = new Map();
-function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum) {
+function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum, moduleKeyOverride) {
+  // بناء على طلب صريح: بلاغ مباشر مع صورة تؤكد إن حالات القولون بأعمار
+  // 70-75 (ضمن نطاق القولون الصحيح 45-75) كانت تُستبعد "خارج الفئة
+  // العمرية" — يطابق تمامًا استخدام حد الثدي الأقصى (69) بدل حد القولون
+  // (75). السبب: MOD() هنا يعتمد على currentModule العام وقت التنفيذ،
+  // بدل الوحدة اللي فعليًا يُبنى لها هذا التقرير. الحل: التقاط تهيئة
+  // الوحدة بشكل صريح هنا (moduleKeyOverride لو مُمرَّرة، وإلا currentModule
+  // الحالي) واستخدامها بكل حساب بهالدالة — يقطع الاحتمال نهائيًا بغض
+  // النظر عن حالة المتغيّر العام وقت الاستدعاء.
+  const modCfg = MODULES[moduleKeyOverride || currentModule];
   const st = reportState[name];
   if (!st.pending || st.colIdx < 0) return { error: 'nofile' };
   if (st.genderIdx === undefined) {
     st.genderIdx = findCol(st.pending.headerRow.map(normalizeLabel), ['gender', 'الجنس', 'sex']);
   }
   if (st.secondaryDateIdx === undefined) {
-    st.secondaryDateIdx = MOD().secondaryDateColHints
-      ? findCol(st.pending.headerRow.map(normalizeLabel), MOD().secondaryDateColHints)
+    st.secondaryDateIdx = modCfg.secondaryDateColHints
+      ? findCol(st.pending.headerRow.map(normalizeLabel), modCfg.secondaryDateColHints)
       : -1;
   }
   if (st.tertiaryDateIdx === undefined) {
-    st.tertiaryDateIdx = MOD().tertiaryDateColHints
-      ? findCol(st.pending.headerRow.map(normalizeLabel), MOD().tertiaryDateColHints)
+    st.tertiaryDateIdx = modCfg.tertiaryDateColHints
+      ? findCol(st.pending.headerRow.map(normalizeLabel), modCfg.tertiaryDateColHints)
       : -1;
   }
   // الدرعية-only extra columns — this hospital's file includes additional
@@ -18228,7 +18238,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum)
   // consent/attendance column specifically says the patient refused
   // (as opposed to a no-show or being treated elsewhere, which also
   // exist in the same column but are different reasons).
-  const consentColIdx = (!MOD().isDigitCategory && st.pending.headerRow)
+  const consentColIdx = (!modCfg.isDigitCategory && st.pending.headerRow)
     ? findCol(st.pending.headerRow.map(normalizeLabel), ['حضر موعد الحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة'])
     : -1;
   const byNum = new Map();
@@ -18554,7 +18564,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum)
     // Computed here (earlier than its other uses further below) so the
     // الدرعية-only checks right after can gate on it directly.
     const ageForGating = st.ageIdx >= 0 ? extractAge(r[st.ageIdx]) : null;
-    const ageOutOfRange = st.ageIdx >= 0 && (ageForGating === null || ageForGating < MOD().ageMin || ageForGating > MOD().ageMax);
+    const ageOutOfRange = st.ageIdx >= 0 && (ageForGating === null || ageForGating < modCfg.ageMin || ageForGating > modCfg.ageMax);
     // الدرعية-only extra field completeness checks — same period-scoping fix.
     if (name === 'الدرعية') {
       if (st.diriyahRiskGroupIdx >= 0 && !String(r[st.diriyahRiskGroupIdx] ?? '').trim()) {
@@ -20278,10 +20288,11 @@ function printDataEntryErrorsReportInner(range, skipPrint) {
   });
 }
 
-function collectReportExcludedNotesData(range) {
+function collectReportExcludedNotesData(range, moduleKeyOverride) {
   const scopeSel = document.getElementById('reportExcludedScopeSelect');
   const scope = scopeSel ? scopeSel.value : '__all__';
-  let hospitals = (scope === '__all__' || !scope) ? REPORT_HOSPITALS : [scope];
+  const hospitalsForModule = moduleKeyOverride ? REPORT_HOSPITALS_BY_MODULE[moduleKeyOverride] : REPORT_HOSPITALS;
+  let hospitals = (scope === '__all__' || !scope) ? hospitalsForModule : [scope];
   if (afifRestrictedMode) hospitals = hospitals.filter(h => h === RESTRICTED_HOSPITAL);
 
   const totalsRows = [];
@@ -20293,7 +20304,7 @@ function collectReportExcludedNotesData(range) {
     const st = reportState[name];
     if (!st.pending || st.colIdx < 0) return;
     anyFile = true;
-    const res = collectReportScanRowsForHospital(name, range, sharedAuditByNum2);
+    const res = collectReportScanRowsForHospital(name, range, sharedAuditByNum2, moduleKeyOverride);
     if (res.error) return;
     totalsRows.push({
       hospital: hospitalDisplayName(name),
@@ -20726,11 +20737,18 @@ function exportCorrectedDatesExcel() {
   xlsxSave(wb, `${asciiModLabel()}_Corrected-Dates_${dstr}.xlsx`);
 }
 function printReportExcludedRows(skipPrint, overrideRange) {
+  // التقاط الوحدة الحالية بشكل صريح وثابت هنا فورًا — بدل الاعتماد على
+  // currentModule العام بمواضع متفرقة بمنتصف الدالة (لو تغيّر لأي سبب
+  // أثناء التنفيذ، ولو نظريًا فقط). بناء على طلب صريح: بلاغ مباشر إن
+  // طباعة السجلات المستبعدة بالقولون كانت تظهر بيانات/عنوان الثدي.
+  // هذا يضمن كل استدعاء بهالدالة معزول 100% بوحدته الفعلية وقت الضغط
+  // على الزر، بغض النظر عن أي تغيير لاحق بالمتغيّر العام.
+  const printModuleKey = currentModule;
   const period = document.getElementById('reportPeriod').value;
   const range = overrideRange || resolveReportRange(period);
   if (!range) { showAlertModal(t('errPickReportPeriod')); return; }
 
-  const { anyFile, totalsRows, excludedAllRows, scope } = collectReportExcludedNotesData(range);
+  const { anyFile, totalsRows, excludedAllRows, scope } = collectReportExcludedNotesData(range, printModuleKey);
   if (!anyFile) { showAlertModal(t('errNoHospitalWithFileOrTarget')); return; }
 
   const fmt = d => fmtDateLocalized(d);
@@ -20784,7 +20802,7 @@ function printReportExcludedRows(skipPrint, overrideRange) {
 
   const container = document.getElementById('report-excluded-print-only');
   container.innerHTML = `
-    ${buildPrintBrandHeaderHtml('ملاحظات التقرير — ' + scopeLabel + ' — ' + modLabel(), periodLabel)}
+    ${buildPrintBrandHeaderHtml('ملاحظات التقرير — ' + scopeLabel + ' — ' + modLabel(printModuleKey), periodLabel)}
     <div class="report-divider"></div>
     <h4 style="margin:14px 0 8px">الإجمالي لكل مستشفى</h4>
     ${totalsTableHtml}
@@ -20793,7 +20811,7 @@ function printReportExcludedRows(skipPrint, overrideRange) {
     ${buildPrintBrandFooterHtml()}`;
 
   const originalTitle = document.title;
-  document.title = buildSafePrintFilename(['Report-Notes', asciiModLabel(), range.from.toISOString().slice(0,10)]);
+  document.title = buildSafePrintFilename(['Report-Notes', asciiModLabel(printModuleKey), range.from.toISOString().slice(0,10)]);
   if (skipPrint) return;
   document.body.classList.add('printing-excluded-notes');
   document.body.offsetHeight; // يجبر إنهاء أي حساب تخطيط معلّق فورًا (مهم بعد تغيير حجم الصفحة بالآيفون تحديدًا)
