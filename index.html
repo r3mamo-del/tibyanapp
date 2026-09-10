@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.12.1</span>
+  <span id="app-version">الإصدار 8.12.2</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -17464,7 +17464,7 @@ function classifySpecificCenter(raw) {
 // اسم عرض جاهز للمركز/الجهة اللي سُجِّلت منها الحالة — يجمع facility +
 // specificCenter (المحسوبين أصلًا بـclassifyFacilityValue/classifySpecificCenter)
 // بنص واحد مفهوم، للاستخدام بأعمدة "مصدر الحالة" بالتقارير المطبوعة.
-function facilitySourceLabel(facility, specificCenter) {
+function facilitySourceLabel(facility, specificCenter, rawValue) {
   if (facility === 'center' && specificCenter) {
     const map = {
       centerEast: t('afifCenterEast'), centerWest: t('afifCenterWest'),
@@ -17476,7 +17476,15 @@ function facilitySourceLabel(facility, specificCenter) {
   if (facility === 'hospital') return t('hospitalNameLbl') === 'اسم المستشفى' ? 'المستشفى' : 'Hospital';
   if (facility === 'clinic') return currentLang === 'en' ? 'Clinic' : 'العيادات';
   if (facility === 'radiology') return currentLang === 'en' ? 'Radiology' : 'الأشعة';
-  return '';
+  // بناء على طلب صريح: بلاغ مباشر إن بعض الصفوف (خصوصًا "مفحوص سابقًا")
+  // لسه تطلع باسم المستشفى بدل اسم المركز — يعني قيمة عمود المركز
+  // الخام بالملف لهذي الصفوف ما تطابق أنماط التصنيف المعروفة (مركز
+  // عام غير مصنَّف بـclassifySpecificCenter، أو facility === 'other'/
+  // 'unspecified'). بدل الرجوع الصامت لاسم المستشفى (يخفي المشكلة)، نعرض
+  // النص الخام كما هو مباشرة من الملف — أدق وأوضح، ويوضّح بالضبط وش
+  // مكتوب فعليًا بذاك الصف لو احتجنا نضيف نمط تصنيف جديد لاحقًا.
+  const raw = String(rawValue ?? '').trim();
+  return raw || '';
 }
 function classifyFacilityValue(raw) {
   const s = String(raw ?? '').trim();
@@ -18303,6 +18311,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
     // صريح: يُعرض بتقرير "السجلات المستبعدة" لجلسة عفيف المقيَّدة فقط.
     const rowFacility = st.facilityIdx >= 0 ? classifyFacilityValue(r[st.facilityIdx]) : null;
     const rowSpecificCenter = rowFacility === 'center' && st.facilityIdx >= 0 ? classifySpecificCenter(r[st.facilityIdx]) : null;
+    const rowFacilityRaw = st.facilityIdx >= 0 ? r[st.facilityIdx] : null;
 
     if (consentColIdx >= 0 && isRefusedValue(r[consentColIdx])) refusedCount++;
 
@@ -18350,7 +18359,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
           dt = swapped;
         } else if (ambiguousDateNearPeriod(primaryParts.y, primaryParts.m, primaryParts.d, range)) {
           dateAmbiguousCount++;
-          excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: ambiguousDateOf(r), reason: 'dateAmbiguous', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter });
+          excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: ambiguousDateOf(r), reason: 'dateAmbiguous', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter, facilityRaw: rowFacilityRaw });
           return;
         } else {
           outOfPeriod++; // neither reading could fall in this period — just an ordinary out-of-period row
@@ -18381,7 +18390,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
               dt = swapped;
             } else if (ambiguousDateNearPeriod(dt.getFullYear(), dt.getMonth() + 1, dt.getDate(), range)) {
               dateAmbiguousCount++;
-              excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: ambiguousDateOf(r), reason: 'dateAmbiguous', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter });
+              excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: ambiguousDateOf(r), reason: 'dateAmbiguous', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter, facilityRaw: rowFacilityRaw });
               return;
             } else {
               outOfPeriod++;
@@ -18502,7 +18511,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
         // بدون تقييد، بس الصف اللي يظهر فعليًا بالتقرير المطبوع/
         // المصدَّر هو المقيَّد بالفترة.
         if (isRowLikelyNearPeriod(st.pending.dataRows, st.dateIdx, rowIdx, range, preferMonthFirst)) {
-          excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'badDate', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter });
+          excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'badDate', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter, facilityRaw: rowFacilityRaw });
         }
         return;
       } else if (dt < range.from || dt > range.to) {
@@ -18563,7 +18572,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
     // التعليق ببداية الحلقة لتفاصيل السبب).
     if (pendingDateIncompleteNote) dataErrorNotes.push(pendingDateIncompleteNote);
     rawEntryCount++;
-    if (num.length !== 10) { invalidIdCount++; excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'invalidId', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter }); return; } // must match bulk-scan's rule exactly
+    if (num.length !== 10) { invalidIdCount++; excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'invalidId', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter, facilityRaw: rowFacilityRaw }); return; } // must match bulk-scan's rule exactly
 
     // Secondary date column completeness/format check — label and reason
     // key depend on which module this is, since the SAME st.secondaryDateIdx
@@ -18629,11 +18638,11 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
     if (st.genderIdx >= 0 && !genderRaw) {
       dataErrorNotes.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'genderBlank', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
     }
-    if (ageOutOfRange) { ageExcluded++; excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'ageExcluded', extra: age, sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter }); return; }
-    const facility = st.facilityIdx >= 0 ? classifyFacilityValue(r[st.facilityIdx]) : null;
-    const specificCenter = facility === 'center' && st.facilityIdx >= 0 ? classifySpecificCenter(r[st.facilityIdx]) : null;
+    if (ageOutOfRange) { ageExcluded++; excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'ageExcluded', extra: age, sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter, facilityRaw: rowFacilityRaw }); return; }
+    const facility = rowFacility;
+    const specificCenter = rowSpecificCenter;
     const gender = st.genderIdx >= 0 ? String(r[st.genderIdx] ?? '').trim() : '';
-    const candidate = { num, hospital: name, dateStr, dateCell, dateObj, biradRaw, category, age, facility, specificCenter, gender, excludeReason: (st.biradIdx >= 0 && category === null) ? 'noResult' : null, row: r };
+    const candidate = { num, hospital: name, dateStr, dateCell, dateObj, biradRaw, category, age, facility, specificCenter, facilityRaw: rowFacilityRaw, gender, excludeReason: (st.biradIdx >= 0 && category === null) ? 'noResult' : null, row: r };
 
     const existing = byNum.get(num);
     if (!existing) { byNum.set(num, candidate); return; }
@@ -18663,7 +18672,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
         loser = newerWins ? existing : candidate;
       }
     }
-    excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: loser.dateStr, reason: 'duplicate', prevExamDateText: winner.dateStr || '—', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: loser.facility, specificCenter: loser.specificCenter });
+    excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: loser.dateStr, reason: 'duplicate', prevExamDateText: winner.dateStr || '—', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: loser.facility, specificCenter: loser.specificCenter, facilityRaw: loser.facilityRaw });
     byNum.set(num, winner);
   });
 
@@ -18677,7 +18686,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
         hospital: name, num, rawIdValue: num, dateText: c.dateStr, reason: 'auditDuplicate',
         prevExamDateText: prevExamDate ? formatDateForExport(prevExamDate) : (auditRec.date ? String(auditRec.date) : '—'),
         sheetRow: c.row ? st.pending.dataRows.indexOf(c.row) + 2 : '—',
-        facility: c.facility, specificCenter: c.specificCenter,
+        facility: c.facility, specificCenter: c.specificCenter, facilityRaw: c.facilityRaw,
       });
       return;
     }
@@ -20829,7 +20838,7 @@ function printReportExcludedRows(skipPrint, overrideRange) {
           // بدل تكرار "عفيف" بكل صف — أوضح وأفيد بما إن المستشفى معروف
           // أصلًا من عنوان التقرير نفسه.
           const originLabel = afifRestrictedMode
-            ? (facilitySourceLabel(er.facility, er.specificCenter) || er.hospital)
+            ? (facilitySourceLabel(er.facility, er.specificCenter, er.facilityRaw) || er.hospital)
             : er.hospital;
           return `<tr>
           <td ${tdStyle}>${esc(originLabel)}</td><td ${tdStyle}>${esc(String(er.sheetRow ?? '—'))}</td><td ${tdStyle}>${esc(isAllScope ? maskId(er.id) : String(er.id))}</td><td ${tdStyle}>${esc(er.dateText)}</td>
@@ -20923,7 +20932,7 @@ function printDuplicateCasesReportInner(range, skipPrint) {
           // بتقرير "مسار" (الوصول الكامل)، لأن تصنيف المراكز هذا خاص
           // بآلية تسجيل عفيف الداخلية ومو له معنى بتقرير يجمع مستشفيات
           // ثانية.
-          const centerLabel = afifRestrictedMode ? facilitySourceLabel(er.facility, er.specificCenter) : '';
+          const centerLabel = afifRestrictedMode ? facilitySourceLabel(er.facility, er.specificCenter, er.facilityRaw) : '';
           const rowRefText = er.sheetRow
             ? (isAudit
                 ? `صف ${esc(String(er.sheetRow))} بالملف الجديد المرفوع`
