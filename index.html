@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.11.4</span>
+  <span id="app-version">الإصدار 8.11.8</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -17461,6 +17461,23 @@ function classifySpecificCenter(raw) {
   return null;
 }
 
+// اسم عرض جاهز للمركز/الجهة اللي سُجِّلت منها الحالة — يجمع facility +
+// specificCenter (المحسوبين أصلًا بـclassifyFacilityValue/classifySpecificCenter)
+// بنص واحد مفهوم، للاستخدام بأعمدة "مصدر الحالة" بالتقارير المطبوعة.
+function facilitySourceLabel(facility, specificCenter) {
+  if (facility === 'center' && specificCenter) {
+    const map = {
+      centerEast: t('afifCenterEast'), centerWest: t('afifCenterWest'),
+      centerNorth: t('afifCenterNorth'), centerSulaimaniyah: t('afifCenterSulaimaniyah'),
+      communityHealth: t('afifCommunityHealth'),
+    };
+    return map[specificCenter] || '';
+  }
+  if (facility === 'hospital') return t('hospitalNameLbl') === 'اسم المستشفى' ? 'المستشفى' : 'Hospital';
+  if (facility === 'clinic') return currentLang === 'en' ? 'Clinic' : 'العيادات';
+  if (facility === 'radiology') return currentLang === 'en' ? 'Radiology' : 'الأشعة';
+  return '';
+}
 function classifyFacilityValue(raw) {
   const s = String(raw ?? '').trim();
   if (!s) return 'unspecified';
@@ -18639,7 +18656,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
         loser = newerWins ? existing : candidate;
       }
     }
-    excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: loser.dateStr, reason: 'duplicate', prevExamDateText: winner.dateStr || '—', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
+    excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: loser.dateStr, reason: 'duplicate', prevExamDateText: winner.dateStr || '—', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: loser.facility, specificCenter: loser.specificCenter });
     byNum.set(num, winner);
   });
 
@@ -18653,6 +18670,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
         hospital: name, num, rawIdValue: num, dateText: c.dateStr, reason: 'auditDuplicate',
         prevExamDateText: prevExamDate ? formatDateForExport(prevExamDate) : (auditRec.date ? String(auditRec.date) : '—'),
         sheetRow: c.row ? st.pending.dataRows.indexOf(c.row) + 2 : '—',
+        facility: c.facility, specificCenter: c.specificCenter,
       });
       return;
     }
@@ -20358,6 +20376,9 @@ function collectReportExcludedNotesData(range, moduleKeyOverride) {
           const loserHospital = totalsRows[e.hospitalIdx];
           loserHospital.duplicatesRemoved = (loserHospital.duplicatesRemoved || 0) + 1;
           loserHospital.netFinal = Math.max(0, (loserHospital.netFinal || 0) - 1);
+          const loserSt = reportState[loserHospital.hospitalRaw];
+          const loserSheetRow = (e.caseObj.row && loserSt?.pending?.dataRows)
+            ? loserSt.pending.dataRows.indexOf(e.caseObj.row) + 2 : '';
           excludedAllRows.push({
             hospital: loserHospital.hospital,
             id: e.caseObj.num,
@@ -20365,6 +20386,8 @@ function collectReportExcludedNotesData(range, moduleKeyOverride) {
             reasonLabel: REPORT_EXCLUDED_REASON_LABELS['crossHospitalDuplicate'] || 'duplicate',
             prevExamDateText: `${hospitalDisplayName(totalsRows[ownerEntry.hospitalIdx].hospitalRaw)} — ${ownerEntry.caseObj.dateStr || '—'}`,
             age: '',
+            sheetRow: loserSheetRow,
+            facility: e.caseObj.facility, specificCenter: e.caseObj.specificCenter,
           });
         });
       });
@@ -20848,7 +20871,8 @@ function printDuplicateCasesReportInner(range, skipPrint) {
 
   const duplicateRows = excludedAllRows.filter(er =>
     er.reasonLabel === (REPORT_EXCLUDED_REASON_LABELS['duplicate'] || '') ||
-    er.reasonLabel === (REPORT_EXCLUDED_REASON_LABELS['crossHospitalDuplicate'] || '')
+    er.reasonLabel === (REPORT_EXCLUDED_REASON_LABELS['crossHospitalDuplicate'] || '') ||
+    er.reasonLabel === (REPORT_EXCLUDED_REASON_LABELS['auditDuplicate'] || '')
   );
 
   const fmt2 = d => fmtDateLocalized(d);
@@ -20867,18 +20891,30 @@ function printDuplicateCasesReportInner(range, skipPrint) {
 
   const withinCount = duplicateRows.filter(er => er.reasonLabel === REPORT_EXCLUDED_REASON_LABELS['duplicate']).length;
   const crossCount = duplicateRows.filter(er => er.reasonLabel === REPORT_EXCLUDED_REASON_LABELS['crossHospitalDuplicate']).length;
+  const auditCount = duplicateRows.filter(er => er.reasonLabel === REPORT_EXCLUDED_REASON_LABELS['auditDuplicate']).length;
 
   const tableHtml2 = duplicateRows.length ? `
     <table class="report-table" ${tableStyle}>
       <thead><tr>
         <th ${thStyle}>${t('hospitalNameLbl')}</th><th ${thStyle}>${isAllScope2 ? 'رقم الهوية (آخر 4 أرقام)' : t('idNumberLbl')}</th><th ${thStyle}>التاريخ بالملف</th>
-        <th ${thStyle}>النوع</th><th ${thStyle}>يطابق</th>
+        <th ${thStyle}>مصدر الحالة</th><th ${thStyle}>النوع</th><th ${thStyle}>يطابق</th>
       </tr></thead>
       <tbody>
-        ${duplicateRows.map(er => `<tr>
+        ${duplicateRows.map(er => {
+          const isAudit = er.reasonLabel === REPORT_EXCLUDED_REASON_LABELS['auditDuplicate'];
+          const centerLabel = facilitySourceLabel(er.facility, er.specificCenter);
+          const rowRefText = er.sheetRow
+            ? (isAudit
+                ? `صف ${esc(String(er.sheetRow))} بالملف الجديد المرفوع`
+                : `صف ${esc(String(er.sheetRow))} بالملف`)
+            : '—';
+          const sourceText = centerLabel ? `${esc(centerLabel)}<br><span style="font-size:10px; color:var(--muted)">${rowRefText}</span>` : rowRefText;
+          return `<tr>
           <td ${tdStyle}>${esc(er.hospital)}</td><td ${tdStyle}>${esc(isAllScope2 ? maskId2(er.id) : String(er.id))}</td><td ${tdStyle}>${esc(er.dateText)}</td>
-          <td ${tdStyle}>${esc(er.reasonLabel)}</td><td ${tdStyle}>${esc(er.prevExamDateText || '—')}</td>
-        </tr>`).join('')}
+          <td ${tdStyle}>${sourceText}</td>
+          <td ${tdStyle}>${esc(er.reasonLabel)}</td><td ${tdStyle}>${esc(isAudit ? ('ملف التدقيق — ' + (er.prevExamDateText || '—')) : (er.prevExamDateText || '—'))}</td>
+        </tr>`;
+        }).join('')}
       </tbody>
     </table>` : `<div style="text-align:center; color:var(--muted); padding:20px">لا توجد حالات مكررة بهذه الفترة</div>`;
 
@@ -20894,6 +20930,10 @@ function printDuplicateCasesReportInner(range, skipPrint) {
       <div style="flex:1; background:var(--accentSoft); border-radius:10px; padding:12px; text-align:center">
         <div style="font-size:19px; font-weight:800; color:var(--accent)">${crossCount}</div>
         <div style="font-size:11px; color:var(--muted); margin-top:4px">مكرر بمستشفى آخر</div>
+      </div>
+      <div style="flex:1; background:var(--accentSoft); border-radius:10px; padding:12px; text-align:center">
+        <div style="font-size:19px; font-weight:800; color:var(--accent)">${auditCount}</div>
+        <div style="font-size:11px; color:var(--muted); margin-top:4px">مفحوص سابقًا (ملف التدقيق)</div>
       </div>
     </div>
     ${tableHtml2}
