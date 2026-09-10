@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.12.2</span>
+  <span id="app-version">الإصدار 8.12.3</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -3970,6 +3970,7 @@ const I18N = {
     idNumberColLbl: "ID Number Column",
     dateColRequiredLbl: "Date Column (required to calculate the period)",
     ageColOptionalLbl: "Age Column — optional",
+    facilityColOptionalLbl: "Facility/Center Column — optional",
     weeklyTargetLbl: "Weekly Target",
     monthlyTargetLbl: "Monthly Target",
     yearlyTargetLbl: "Yearly Target",
@@ -4769,6 +4770,7 @@ const I18N = {
     idNumberColLbl: "عمود ID Number",
     dateColRequiredLbl: "عمود التاريخ (لازم لحساب الفترة)",
     ageColOptionalLbl: "عمود العمر — اختياري",
+    facilityColOptionalLbl: "عمود المركز/الجهة — اختياري",
     weeklyTargetLbl: "المستهدف الأسبوعي",
     monthlyTargetLbl: "المستهدف الشهري",
     yearlyTargetLbl: "المستهدف السنوي",
@@ -12612,7 +12614,8 @@ function renderReportHospitalCards() {
         <select id="reportBiradCol-${i}" class="mb14" onchange="updateReportColumn('${name}', ${i})"></select>
         <label class="lbl" for="reportAgeCol-${i}">${t('ageColOptionalLbl')}</label>
         <select id="reportAgeCol-${i}" onchange="updateReportColumn('${name}', ${i})"></select>
-        <select id="reportFacilityCol-${i}" style="display:none" onchange="updateReportColumn('${name}', ${i})"></select>
+        <label class="lbl" for="reportFacilityCol-${i}">${t('facilityColOptionalLbl')}</label>
+        <select id="reportFacilityCol-${i}" onchange="updateReportColumn('${name}', ${i})"></select>
       </div>
 
       <div class="grid2" style="margin-top:12px">
