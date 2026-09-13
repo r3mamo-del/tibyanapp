@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.12.3</span>
+  <span id="app-version">الإصدار 8.11.5</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -3970,7 +3970,6 @@ const I18N = {
     idNumberColLbl: "ID Number Column",
     dateColRequiredLbl: "Date Column (required to calculate the period)",
     ageColOptionalLbl: "Age Column — optional",
-    facilityColOptionalLbl: "Facility/Center Column — optional",
     weeklyTargetLbl: "Weekly Target",
     monthlyTargetLbl: "Monthly Target",
     yearlyTargetLbl: "Yearly Target",
@@ -4770,7 +4769,6 @@ const I18N = {
     idNumberColLbl: "عمود ID Number",
     dateColRequiredLbl: "عمود التاريخ (لازم لحساب الفترة)",
     ageColOptionalLbl: "عمود العمر — اختياري",
-    facilityColOptionalLbl: "عمود المركز/الجهة — اختياري",
     weeklyTargetLbl: "المستهدف الأسبوعي",
     monthlyTargetLbl: "المستهدف الشهري",
     yearlyTargetLbl: "المستهدف السنوي",
@@ -8716,6 +8714,19 @@ function buildAuditByNumUncached() {
 function sameCalendarDay(d1, d2) {
   return !!d1 && !!d2 && d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 }
+// يلتقط حالة "تبديل اليوم/الشهر": نفس التاريخ فعليًا (نفس السنة، ونفس
+// الرقمين) لكن مقروء بترتيب معكوس بين مصدرين (يوم-أولًا مقابل شهر-أولًا)
+// — فيبان وكأنه تاريخ ثانٍ كليًا رغم إنه نفس الفحص بالضبط. مؤكَّد كحالة
+// واقعية حقيقية: بلاغ مباشر مع ملف إكسل يوضّح 69 حالة بالدرعية (القولون)
+// كلها بتاريخ فحص "06/09/2026" مطابقة ضد "09/06/2026" (نفس الأرقام
+// معكوسة) كـ"مفحوص سابقًا" — نفس التسجيل يُحسب مرتين بصيغتين مختلفتين
+// فيتطابق مع نفسه بالغلط، بدل ما يُستبعد كتطابق ذاتي.
+function isDayMonthSwapOfSameDate(d1, d2) {
+  if (!d1 || !d2) return false;
+  if (d1.getFullYear() !== d2.getFullYear()) return false;
+  if (sameCalendarDay(d1, d2)) return false; // already an exact match, not a swap case
+  return d1.getDate() === (d2.getMonth() + 1) && (d1.getMonth() + 1) === d2.getDate();
+}
 function isAuditDuplicateWithinYear(num, auditByNum, reportRangeFrom, currentHospital, currentRow, currentDateObj) {
   const recs = auditByNum.get(num);
   if (!recs || !recs.length) return null;
@@ -8726,21 +8737,22 @@ function isAuditDuplicateWithinYear(num, auditByNum, reportRangeFrom, currentHos
   // source silently overriding another's date can no longer hide a
   // genuine match.
   //
-  // SELF-MATCH GUARDS (two, deliberately narrow — a blanket "same
-  // hospital" exclusion was tried and reverted: it wrongly hid GENUINE
-  // duplicates too, a real patient screened twice at the same hospital on
-  // different dates, inflating the report's total instead of fixing it):
+  // SELF-MATCH GUARDS (ثلاثة، بالترتيب حسب النطاق):
   //   1) Source 3 exact row identity — see buildAuditByNum above.
   //   2) Source 1+2 (auto-pushed central audit records): only excluded
   //      when BOTH the hospital AND the calendar day match the case
   //      currently being evaluated — i.e. it's almost certainly the exact
   //      same exam, already pushed into the central file earlier by this
   //      same hospital's own auto-push, not a different real visit.
+  //   3) نفس التاريخ لكن بترتيب يوم/شهر معكوس (isDayMonthSwapOfSameDate) —
+  //      بغض النظر عن المستشفى — نفس الفحص بالضبط مقروء بصيغتين
+  //      مختلفتين، مو تكرار حقيقي بعد سنة. مؤكَّد كحالة واقعية حقيقية.
 
   return recs.find(rec => {
     if (currentRow && rec.row === currentRow) return false;
     const d = parseCellDate(rec.date, rec.preferMonthFirst);
     if (currentHospital && currentDateObj && rec.hospital === currentHospital && sameCalendarDay(d, currentDateObj)) return false;
+    if (currentDateObj && isDayMonthSwapOfSameDate(d, currentDateObj)) return false;
     if (!d) return false;
     if (from && d < from) return false;
     if (to && d > to) return false;
@@ -12614,8 +12626,7 @@ function renderReportHospitalCards() {
         <select id="reportBiradCol-${i}" class="mb14" onchange="updateReportColumn('${name}', ${i})"></select>
         <label class="lbl" for="reportAgeCol-${i}">${t('ageColOptionalLbl')}</label>
         <select id="reportAgeCol-${i}" onchange="updateReportColumn('${name}', ${i})"></select>
-        <label class="lbl" for="reportFacilityCol-${i}">${t('facilityColOptionalLbl')}</label>
-        <select id="reportFacilityCol-${i}" onchange="updateReportColumn('${name}', ${i})"></select>
+        <select id="reportFacilityCol-${i}" style="display:none" onchange="updateReportColumn('${name}', ${i})"></select>
       </div>
 
       <div class="grid2" style="margin-top:12px">
@@ -17464,31 +17475,6 @@ function classifySpecificCenter(raw) {
   return null;
 }
 
-// اسم عرض جاهز للمركز/الجهة اللي سُجِّلت منها الحالة — يجمع facility +
-// specificCenter (المحسوبين أصلًا بـclassifyFacilityValue/classifySpecificCenter)
-// بنص واحد مفهوم، للاستخدام بأعمدة "مصدر الحالة" بالتقارير المطبوعة.
-function facilitySourceLabel(facility, specificCenter, rawValue) {
-  if (facility === 'center' && specificCenter) {
-    const map = {
-      centerEast: t('afifCenterEast'), centerWest: t('afifCenterWest'),
-      centerNorth: t('afifCenterNorth'), centerSulaimaniyah: t('afifCenterSulaimaniyah'),
-      communityHealth: t('afifCommunityHealth'),
-    };
-    return map[specificCenter] || '';
-  }
-  if (facility === 'hospital') return t('hospitalNameLbl') === 'اسم المستشفى' ? 'المستشفى' : 'Hospital';
-  if (facility === 'clinic') return currentLang === 'en' ? 'Clinic' : 'العيادات';
-  if (facility === 'radiology') return currentLang === 'en' ? 'Radiology' : 'الأشعة';
-  // بناء على طلب صريح: بلاغ مباشر إن بعض الصفوف (خصوصًا "مفحوص سابقًا")
-  // لسه تطلع باسم المستشفى بدل اسم المركز — يعني قيمة عمود المركز
-  // الخام بالملف لهذي الصفوف ما تطابق أنماط التصنيف المعروفة (مركز
-  // عام غير مصنَّف بـclassifySpecificCenter، أو facility === 'other'/
-  // 'unspecified'). بدل الرجوع الصامت لاسم المستشفى (يخفي المشكلة)، نعرض
-  // النص الخام كما هو مباشرة من الملف — أدق وأوضح، ويوضّح بالضبط وش
-  // مكتوب فعليًا بذاك الصف لو احتجنا نضيف نمط تصنيف جديد لاحقًا.
-  const raw = String(rawValue ?? '').trim();
-  return raw || '';
-}
 function classifyFacilityValue(raw) {
   const s = String(raw ?? '').trim();
   if (!s) return 'unspecified';
@@ -18308,14 +18294,6 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
     const num = normalizeNum(r[st.colIdx]);
     if (!num) return; // a genuinely blank row isn't an "entry" at all
 
-    // مصدر الحالة (المركز الصحي: شرق/غرب/شمال عفيف...) — يُحسب هنا
-    // بأول الصف مباشرة عشان يكون متوفر لكل أسباب الاستبعاد الممكنة
-    // بهذا الصف (عمر، تاريخ، تكرار...)، مو بس التكرار. بناء على طلب
-    // صريح: يُعرض بتقرير "السجلات المستبعدة" لجلسة عفيف المقيَّدة فقط.
-    const rowFacility = st.facilityIdx >= 0 ? classifyFacilityValue(r[st.facilityIdx]) : null;
-    const rowSpecificCenter = rowFacility === 'center' && st.facilityIdx >= 0 ? classifySpecificCenter(r[st.facilityIdx]) : null;
-    const rowFacilityRaw = st.facilityIdx >= 0 ? r[st.facilityIdx] : null;
-
     if (consentColIdx >= 0 && isRefusedValue(r[consentColIdx])) refusedCount++;
 
     // ملاحظة "تاريخ غير مكتمل" (dateIncomplete) — كانت تُضاف مباشرة لـ
@@ -18362,7 +18340,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
           dt = swapped;
         } else if (ambiguousDateNearPeriod(primaryParts.y, primaryParts.m, primaryParts.d, range)) {
           dateAmbiguousCount++;
-          excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: ambiguousDateOf(r), reason: 'dateAmbiguous', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter, facilityRaw: rowFacilityRaw });
+          excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: ambiguousDateOf(r), reason: 'dateAmbiguous', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
           return;
         } else {
           outOfPeriod++; // neither reading could fall in this period — just an ordinary out-of-period row
@@ -18393,7 +18371,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
               dt = swapped;
             } else if (ambiguousDateNearPeriod(dt.getFullYear(), dt.getMonth() + 1, dt.getDate(), range)) {
               dateAmbiguousCount++;
-              excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: ambiguousDateOf(r), reason: 'dateAmbiguous', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter, facilityRaw: rowFacilityRaw });
+              excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: ambiguousDateOf(r), reason: 'dateAmbiguous', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
               return;
             } else {
               outOfPeriod++;
@@ -18514,7 +18492,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
         // بدون تقييد، بس الصف اللي يظهر فعليًا بالتقرير المطبوع/
         // المصدَّر هو المقيَّد بالفترة.
         if (isRowLikelyNearPeriod(st.pending.dataRows, st.dateIdx, rowIdx, range, preferMonthFirst)) {
-          excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'badDate', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter, facilityRaw: rowFacilityRaw });
+          excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'badDate', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
         }
         return;
       } else if (dt < range.from || dt > range.to) {
@@ -18575,7 +18553,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
     // التعليق ببداية الحلقة لتفاصيل السبب).
     if (pendingDateIncompleteNote) dataErrorNotes.push(pendingDateIncompleteNote);
     rawEntryCount++;
-    if (num.length !== 10) { invalidIdCount++; excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'invalidId', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter, facilityRaw: rowFacilityRaw }); return; } // must match bulk-scan's rule exactly
+    if (num.length !== 10) { invalidIdCount++; excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'invalidId', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) }); return; } // must match bulk-scan's rule exactly
 
     // Secondary date column completeness/format check — label and reason
     // key depend on which module this is, since the SAME st.secondaryDateIdx
@@ -18641,11 +18619,11 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
     if (st.genderIdx >= 0 && !genderRaw) {
       dataErrorNotes.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'genderBlank', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
     }
-    if (ageOutOfRange) { ageExcluded++; excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'ageExcluded', extra: age, sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: rowFacility, specificCenter: rowSpecificCenter, facilityRaw: rowFacilityRaw }); return; }
-    const facility = rowFacility;
-    const specificCenter = rowSpecificCenter;
+    if (ageOutOfRange) { ageExcluded++; excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'ageExcluded', extra: age, sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) }); return; }
+    const facility = st.facilityIdx >= 0 ? classifyFacilityValue(r[st.facilityIdx]) : null;
+    const specificCenter = facility === 'center' && st.facilityIdx >= 0 ? classifySpecificCenter(r[st.facilityIdx]) : null;
     const gender = st.genderIdx >= 0 ? String(r[st.genderIdx] ?? '').trim() : '';
-    const candidate = { num, hospital: name, dateStr, dateCell, dateObj, biradRaw, category, age, facility, specificCenter, facilityRaw: rowFacilityRaw, gender, excludeReason: (st.biradIdx >= 0 && category === null) ? 'noResult' : null, row: r };
+    const candidate = { num, hospital: name, dateStr, dateCell, dateObj, biradRaw, category, age, facility, specificCenter, gender, excludeReason: (st.biradIdx >= 0 && category === null) ? 'noResult' : null, row: r };
 
     const existing = byNum.get(num);
     if (!existing) { byNum.set(num, candidate); return; }
@@ -18675,7 +18653,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
         loser = newerWins ? existing : candidate;
       }
     }
-    excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: loser.dateStr, reason: 'duplicate', prevExamDateText: winner.dateStr || '—', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), facility: loser.facility, specificCenter: loser.specificCenter, facilityRaw: loser.facilityRaw });
+    excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: loser.dateStr, reason: 'duplicate', prevExamDateText: winner.dateStr || '—', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
     byNum.set(num, winner);
   });
 
@@ -18689,7 +18667,6 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
         hospital: name, num, rawIdValue: num, dateText: c.dateStr, reason: 'auditDuplicate',
         prevExamDateText: prevExamDate ? formatDateForExport(prevExamDate) : (auditRec.date ? String(auditRec.date) : '—'),
         sheetRow: c.row ? st.pending.dataRows.indexOf(c.row) + 2 : '—',
-        facility: c.facility, specificCenter: c.specificCenter, facilityRaw: c.facilityRaw,
       });
       return;
     }
@@ -20262,7 +20239,7 @@ function printDataEntryErrorsReportInner(range, skipPrint) {
 
   const fmt = d => fmtDateLocalized(d);
   const periodLabel = `${fmt(range.from)} ${t('toWord')} ${fmt(range.to)}`;
-  const scopeLabel = (afifRestrictedMode) ? hospitalDisplayName(RESTRICTED_HOSPITAL) : ((scope === '__all__' || !scope) ? t('allHospitalsOption') : hospitalDisplayName(scope));
+  const scopeLabel = (scope === '__all__' || !scope) ? t('allHospitalsOption') : hospitalDisplayName(scope);
   const tableStyle = 'style="border-collapse:collapse; width:100%"';
   const thStyle = 'style="border-bottom:2.5px solid var(--gold); border-top:1px solid var(--border); padding:5px 8px; background:var(--accentSoft); color:var(--accent); font-weight:800; font-size:11.5px; text-align:center"';
   const tdStyle = 'style="border:1px solid var(--border); padding:5px 8px; font-size:11.5px; text-align:center"';
@@ -20395,9 +20372,6 @@ function collectReportExcludedNotesData(range, moduleKeyOverride) {
           const loserHospital = totalsRows[e.hospitalIdx];
           loserHospital.duplicatesRemoved = (loserHospital.duplicatesRemoved || 0) + 1;
           loserHospital.netFinal = Math.max(0, (loserHospital.netFinal || 0) - 1);
-          const loserSt = reportState[loserHospital.hospitalRaw];
-          const loserSheetRow = (e.caseObj.row && loserSt?.pending?.dataRows)
-            ? loserSt.pending.dataRows.indexOf(e.caseObj.row) + 2 : '';
           excludedAllRows.push({
             hospital: loserHospital.hospital,
             id: e.caseObj.num,
@@ -20405,8 +20379,6 @@ function collectReportExcludedNotesData(range, moduleKeyOverride) {
             reasonLabel: REPORT_EXCLUDED_REASON_LABELS['crossHospitalDuplicate'] || 'duplicate',
             prevExamDateText: `${hospitalDisplayName(totalsRows[ownerEntry.hospitalIdx].hospitalRaw)} — ${ownerEntry.caseObj.dateStr || '—'}`,
             age: '',
-            sheetRow: loserSheetRow,
-            facility: e.caseObj.facility, specificCenter: e.caseObj.specificCenter,
           });
         });
       });
@@ -20795,8 +20767,8 @@ function printReportExcludedRows(skipPrint, overrideRange) {
 
   const fmt = d => fmtDateLocalized(d);
   const periodLabel = `${fmt(range.from)} ${t('toWord')} ${fmt(range.to)}`;
-  const isAllScope = (scope === '__all__' || !scope) && !afifRestrictedMode;
-  const scopeLabel = isAllScope ? 'كل المستشفيات' : (afifRestrictedMode ? hospitalDisplayName(RESTRICTED_HOSPITAL) : hospitalDisplayName(scope));
+  const isAllScope = (scope === '__all__' || !scope);
+  const scopeLabel = isAllScope ? 'كل المستشفيات' : hospitalDisplayName(scope);
   // Full ID numbers are only shown when printing a SINGLE hospital's own
   // records (someone at that hospital reviewing their own data). The
   // combined "كل المستشفيات" report crosses hospital boundaries, so IDs
@@ -20831,23 +20803,14 @@ function printReportExcludedRows(skipPrint, overrideRange) {
   const excludedTableHtml = excludedAllRows.length ? `
     <table class="report-table" ${tableStyle}>
       <thead><tr>
-        <th ${thStyle}>${afifRestrictedMode ? 'مصدر الحالة (المركز)' : t('hospitalNameLbl')}</th><th ${thStyle}>رقم السطر بالملف</th><th ${thStyle}>${isAllScope ? 'رقم الهوية (آخر 4 أرقام)' : t('idNumberLbl')}</th><th ${thStyle}>التاريخ بالملف</th>
+        <th ${thStyle}>${t('hospitalNameLbl')}</th><th ${thStyle}>رقم السطر بالملف</th><th ${thStyle}>${isAllScope ? 'رقم الهوية (آخر 4 أرقام)' : t('idNumberLbl')}</th><th ${thStyle}>التاريخ بالملف</th>
         <th ${thStyle}>السبب</th><th ${thStyle}>العمر</th><th ${thStyle}>الفحص السابق</th>
       </tr></thead>
       <tbody>
-        ${excludedAllRows.map(er => {
-          // بناء على طلب صريح: بجلسة عفيف المقيَّدة تحديدًا، عمود "اسم
-          // المستشفى" يُستبدل باسم المركز الصحي (شرق/غرب/شمال عفيف...)
-          // بدل تكرار "عفيف" بكل صف — أوضح وأفيد بما إن المستشفى معروف
-          // أصلًا من عنوان التقرير نفسه.
-          const originLabel = afifRestrictedMode
-            ? (facilitySourceLabel(er.facility, er.specificCenter, er.facilityRaw) || er.hospital)
-            : er.hospital;
-          return `<tr>
-          <td ${tdStyle}>${esc(originLabel)}</td><td ${tdStyle}>${esc(String(er.sheetRow ?? '—'))}</td><td ${tdStyle}>${esc(isAllScope ? maskId(er.id) : String(er.id))}</td><td ${tdStyle}>${esc(er.dateText)}</td>
+        ${excludedAllRows.map(er => `<tr>
+          <td ${tdStyle}>${esc(er.hospital)}</td><td ${tdStyle}>${esc(String(er.sheetRow ?? '—'))}</td><td ${tdStyle}>${esc(isAllScope ? maskId(er.id) : String(er.id))}</td><td ${tdStyle}>${esc(er.dateText)}</td>
           <td ${tdStyle}>${esc(er.reasonLabel)}</td><td ${tdStyle}>${er.age !== '' && er.age != null ? esc(String(er.age)) : '—'}</td><td ${tdStyle}>${esc(er.prevExamDateText || '—')}</td>
-        </tr>`;
-        }).join('')}
+        </tr>`).join('')}
       </tbody>
     </table>` : `<div style="text-align:center; color:var(--muted); padding:20px">لا توجد سجلات مستبعدة بهذه الفترة</div>`;
 
@@ -20899,14 +20862,13 @@ function printDuplicateCasesReportInner(range, skipPrint) {
 
   const duplicateRows = excludedAllRows.filter(er =>
     er.reasonLabel === (REPORT_EXCLUDED_REASON_LABELS['duplicate'] || '') ||
-    er.reasonLabel === (REPORT_EXCLUDED_REASON_LABELS['crossHospitalDuplicate'] || '') ||
-    er.reasonLabel === (REPORT_EXCLUDED_REASON_LABELS['auditDuplicate'] || '')
+    er.reasonLabel === (REPORT_EXCLUDED_REASON_LABELS['crossHospitalDuplicate'] || '')
   );
 
   const fmt2 = d => fmtDateLocalized(d);
   const periodLabel2 = `${fmt2(range.from)} ${t('toWord')} ${fmt2(range.to)}`;
-  const isAllScope2 = (scope === '__all__' || !scope) && !afifRestrictedMode;
-  const scopeLabel2 = isAllScope2 ? 'كل المستشفيات' : (afifRestrictedMode ? hospitalDisplayName(RESTRICTED_HOSPITAL) : hospitalDisplayName(scope));
+  const isAllScope2 = (scope === '__all__' || !scope);
+  const scopeLabel2 = isAllScope2 ? 'كل المستشفيات' : hospitalDisplayName(scope);
   const maskId2 = raw => {
     const s = String(raw ?? '');
     const digits = s.replace(/\D/g, '');
@@ -20919,35 +20881,18 @@ function printDuplicateCasesReportInner(range, skipPrint) {
 
   const withinCount = duplicateRows.filter(er => er.reasonLabel === REPORT_EXCLUDED_REASON_LABELS['duplicate']).length;
   const crossCount = duplicateRows.filter(er => er.reasonLabel === REPORT_EXCLUDED_REASON_LABELS['crossHospitalDuplicate']).length;
-  const auditCount = duplicateRows.filter(er => er.reasonLabel === REPORT_EXCLUDED_REASON_LABELS['auditDuplicate']).length;
 
   const tableHtml2 = duplicateRows.length ? `
     <table class="report-table" ${tableStyle}>
       <thead><tr>
         <th ${thStyle}>${t('hospitalNameLbl')}</th><th ${thStyle}>${isAllScope2 ? 'رقم الهوية (آخر 4 أرقام)' : t('idNumberLbl')}</th><th ${thStyle}>التاريخ بالملف</th>
-        <th ${thStyle}>مصدر الحالة</th><th ${thStyle}>النوع</th><th ${thStyle}>يطابق</th>
+        <th ${thStyle}>النوع</th><th ${thStyle}>يطابق</th>
       </tr></thead>
       <tbody>
-        ${duplicateRows.map(er => {
-          const isAudit = er.reasonLabel === REPORT_EXCLUDED_REASON_LABELS['auditDuplicate'];
-          // بناء على طلب صريح: اسم المركز (شرق/غرب/شمال عفيف...) يظهر
-          // بعمود "مصدر الحالة" فقط بجلسة عفيف المقيَّدة تحديدًا — مو
-          // بتقرير "مسار" (الوصول الكامل)، لأن تصنيف المراكز هذا خاص
-          // بآلية تسجيل عفيف الداخلية ومو له معنى بتقرير يجمع مستشفيات
-          // ثانية.
-          const centerLabel = afifRestrictedMode ? facilitySourceLabel(er.facility, er.specificCenter, er.facilityRaw) : '';
-          const rowRefText = er.sheetRow
-            ? (isAudit
-                ? `صف ${esc(String(er.sheetRow))} بالملف الجديد المرفوع`
-                : `صف ${esc(String(er.sheetRow))} بالملف`)
-            : '—';
-          const sourceText = centerLabel ? `${esc(centerLabel)}<br><span style="font-size:10px; color:var(--muted)">${rowRefText}</span>` : rowRefText;
-          return `<tr>
+        ${duplicateRows.map(er => `<tr>
           <td ${tdStyle}>${esc(er.hospital)}</td><td ${tdStyle}>${esc(isAllScope2 ? maskId2(er.id) : String(er.id))}</td><td ${tdStyle}>${esc(er.dateText)}</td>
-          <td ${tdStyle}>${sourceText}</td>
-          <td ${tdStyle}>${esc(er.reasonLabel)}</td><td ${tdStyle}>${esc(isAudit ? ('ملف التدقيق — ' + (er.prevExamDateText || '—')) : (er.prevExamDateText || '—'))}</td>
-        </tr>`;
-        }).join('')}
+          <td ${tdStyle}>${esc(er.reasonLabel)}</td><td ${tdStyle}>${esc(er.prevExamDateText || '—')}</td>
+        </tr>`).join('')}
       </tbody>
     </table>` : `<div style="text-align:center; color:var(--muted); padding:20px">لا توجد حالات مكررة بهذه الفترة</div>`;
 
@@ -20963,10 +20908,6 @@ function printDuplicateCasesReportInner(range, skipPrint) {
       <div style="flex:1; background:var(--accentSoft); border-radius:10px; padding:12px; text-align:center">
         <div style="font-size:19px; font-weight:800; color:var(--accent)">${crossCount}</div>
         <div style="font-size:11px; color:var(--muted); margin-top:4px">مكرر بمستشفى آخر</div>
-      </div>
-      <div style="flex:1; background:var(--accentSoft); border-radius:10px; padding:12px; text-align:center">
-        <div style="font-size:19px; font-weight:800; color:var(--accent)">${auditCount}</div>
-        <div style="font-size:11px; color:var(--muted); margin-top:4px">مفحوص سابقًا (ملف التدقيق)</div>
       </div>
     </div>
     ${tableHtml2}
