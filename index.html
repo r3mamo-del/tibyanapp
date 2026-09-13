@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.11.5</span>
+  <span id="app-version">الإصدار 8.11.6</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -17274,18 +17274,30 @@ async function refreshAllFromGitHub(isManual) {
   const failedHospitals = [];
   if (statusEl) { statusEl.style.color = 'var(--muted)'; statusEl.textContent = 'جاري المزامنة...'; }
 
+  // بناء على طلب صريح (بلاغ تأخير ملحوظ بسحب البيانات): كانت كل ملفات
+  // المستشفيات (14 ملف: 5 ثدي + 9 قولون) تُجلب بالتسلسل — كل طلب شبكة
+  // ينتظر يخلص اللي قبله قبل ما يبدأ، رغم إن كل مستشفى يكتب على مكان
+  // مستقل تمامًا بالذاكرة (reportStateStore[moduleKey][hospital]) وما
+  // فيه أي تعارض ممكن يصير بينها. تشغيلها بالتوازي (Promise.allSettled)
+  // يخلي وقت الانتظار الكلي = وقت أبطأ طلب وحد، بدل مجموع كل الطلبات —
+  // تسريع كبير خصوصًا على شبكة بطيئة.
+  const allJobs = [];
   for (const moduleKey of ['breast', 'colon']) {
     for (const hospital of REPORT_HOSPITALS_BY_MODULE[moduleKey]) {
-      try {
-        await loadHospitalFromGitHub(moduleKey, hospital);
-        okCount++;
-      } catch (e) {
-        console.error(`GitHub sync failed for ${moduleKey}/${hospital}`, e);
-        failCount++;
-        failedHospitals.push(`${hospital} (${moduleKey === 'colon' ? 'قولون' : 'ثدي'})`);
-      }
+      allJobs.push({ moduleKey, hospital });
     }
   }
+  const results = await Promise.allSettled(allJobs.map(({ moduleKey, hospital }) => loadHospitalFromGitHub(moduleKey, hospital)));
+  results.forEach((result, i) => {
+    const { moduleKey, hospital } = allJobs[i];
+    if (result.status === 'fulfilled') {
+      okCount++;
+    } else {
+      console.error(`GitHub sync failed for ${moduleKey}/${hospital}`, result.reason);
+      failCount++;
+      failedHospitals.push(`${hospital} (${moduleKey === 'colon' ? 'قولون' : 'ثدي'})`);
+    }
+  });
   currentModule = originalModule;
   // يكتب كل بيانات ملفات المستشفيات المجمَّعة بالذاكرة دفعة واحدة (مفتاحين
   // إجمالًا) — بدل عشرات الكتابات المنفصلة يلي كانت تصير أثناء الحلقة
