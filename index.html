@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.12.6</span>
+  <span id="app-version">الإصدار 8.12.7</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -17345,8 +17345,18 @@ async function refreshAllFromGitHub(isManual) {
   // إجمالًا) — بدل عشرات الكتابات المنفصلة يلي كانت تصير أثناء الحلقة
   // أعلى (كل مستشفى على حدة)، وهذا بالضبط سبب تجاوز حد Cloudflare KV
   // اليومي (1000 عملية/يوم) بسرعة.
-  await flushFileCacheBatch();
-  await saveDriveLastUpdate(currentModule);
+  // بناء على طلب صريح (سرّع سحب البيانات أكثر): الأربع خطوات هذي (حفظ
+  // الكاش المجمَّع، حفظ توقيت آخر تحديث، مزامنة الملف المرجعي للقولون،
+  // مزامنة الملف المرجعي للثدي) كانت تصير بالتسلسل رغم إنها تعمل على
+  // بيانات مستقلة تمامًا عن بعض (ما فيها أي تعارض ممكن يصير). تشغيلها
+  // بالتوازي يقلّل وقت الانتظار الكلي لهالمرحلة، بنفس مبدأ تسريع جلب
+  // ملفات المستشفيات المطبَّق فوق.
+  await Promise.all([
+    flushFileCacheBatch(),
+    saveDriveLastUpdate(currentModule),
+    (async () => { try { await syncColonReferenceFromGitHub(); } catch (e) { console.error('reference sync failed', e); } })(),
+    (async () => { try { await syncBreastReferenceFromGitHub(); } catch (e) { console.error('breast reference sync failed', e); } })(),
+  ]);
 
   const summary = `✅ تمّت مزامنة ${okCount} ملف` + (failCount > 0 ? ` — فشل ${failCount}: ${failedHospitals.join('، ')}` : '');
   if (statusEl) { statusEl.style.color = failCount > 0 ? 'var(--warn)' : 'var(--success)'; statusEl.textContent = summary; }
@@ -17358,10 +17368,11 @@ async function refreshAllFromGitHub(isManual) {
   try { updateLiveStatusBadge(); } catch (e) {}
   try { updateAuditWindowDiagnostic(); } catch (e) { console.error('updateAuditWindowDiagnostic post-sync failed', e); }
   try { if (document.getElementById('report-builder-card')) renderReportHospitalCards(); } catch (e) { console.error('renderReportHospitalCards post-sync failed', e); }
-  // القولون بالدرعية تحديدًا: مطابقة مع الملف المرجعي المركزي — البديل
-  // الكامل عن نفس الخطوة اللي كانت تصير عبر Drive قبل إيقافه.
-  try { await syncColonReferenceFromGitHub(); } catch (e) { console.error('reference sync failed', e); }
-  try { await syncBreastReferenceFromGitHub(); } catch (e) { console.error('breast reference sync failed', e); }
+  // القولون بالدرعية تحديدًا: مطابقة مع الملف المرجعي المركزي — تصير
+  // الآن أعلى بالتوازي مع باقي خطوات ما بعد الجلب (بدل التكرار هنا مرة
+  // ثانية بالتسلسل)، فتكون النتيجة جاهزة قبل ما توصل حتى الدوال أعلى
+  // (renderReportHospitalCards وغيرها) — يعني تعرض بيانات أحدث من أول
+  // مرة، بدل ما تحتاج إعادة رسم لاحقة عشان تلحقها.
   dataGenerationCounter++; // الملف المرجعي يؤثر على بيانات الحالات — يُبطل أي نتيجة محفوظة مؤقتًا.
   // يحدّث "سجل الحالات الإيجابية" لكلا الوحدتين صراحة — بدون الاعتماد
   // على أي توقيت أو حالة "الوحدة الحالية" اللحظية (كان أحيانًا ما
