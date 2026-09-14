@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.12.5</span>
+  <span id="app-version">الإصدار 8.12.6</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -17377,6 +17377,18 @@ async function refreshAllFromGitHub(isManual) {
     finally { currentModule = savedModuleForRender; renderPositiveLog(); }
   }
   try { if (typeof generateReport === 'function') generateReport(true); } catch (e) {}
+  // بناء على طلب صريح: بلاغ مباشر مع دليل قاطع — بطاقة المستشفى المصغّرة
+  // بصفحة "التقرير التفصيلي" كانت تطلع أرقام أقل من الصحيح (حالتين
+  // مفقودتين، حريملاء) رغم إن تقرير "السجلات المستبعدة" (يتولَّد لاحقًا
+  // بضغطة يدوية، بعد ما تخلص المزامنة) يطلع الرقم الصحيح لنفس البيانات
+  // بالضبط. السبب: لو المستخدم فاتح "التقرير التفصيلي" وقت ما لسه
+  // المزامنة شغّالة، البطاقة تترسم ببيانات تلك اللحظة (قبل اكتمال جلب
+  // آخر نسخة من الملف)، وتضل عالقة كذا للأبد — لأن التحديث بعد اكتمال
+  // المزامنة كان يحدّث "تقرير الأداء" البسيط بس، وينسى "التقرير
+  // التفصيلي". lastReportView === 'detailed' نفس الإشارة الموثوقة
+  // المستخدمة بمكان مشابه بالكود (تفادي إظهار قسم التقرير التفصيلي
+  // بالغلط لو المستخدم أصلًا ما فتحه من قبل بهالجلسة).
+  try { if (lastReportView === 'detailed' && typeof generateDetailedReport === 'function') generateDetailedReport(true); } catch (e) {}
 }
 
 async function refreshAllFromDriveInner(isManual, statusEl) {
