@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.11.9</span>
+  <span id="app-version">الإصدار 8.12.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -18511,19 +18511,15 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
         // "إجمالي الإدخالات ضمن الفترة" since we can't actually confirm
         // it belongs to this period at all.
         badDate++;
-        // إعادة تفعيل تقييد الفترة بناءً على طلب صريح لاحق: كان تاريخ
-        // غير مقروء يظهر دائمًا بغض النظر عن الفترة (قرار سابق مقصود)،
-        // لكن هذا سبَّب ظهور صفوف قديمة جدًا (خارج الفترة المحددة فعليًا)
-        // بتقرير الأخطاء — مؤكَّد كحالة واقعية حقيقية (بلاغ مباشر،
-        // حريملاء). isRowLikelyNearPeriod مبنية أصلًا لهذا الغرض بالضبط
-        // (نافذة بحث واسعة PERIOD_PROXIMITY_WINDOW=40 صف + هامش أيام
-        // PERIOD_PROXIMITY_BUFFER_DAYS=20 يوم) لكنها كانت متجاوَزة بقرار
-        // "استثناء" سابق. العدّاد badDate (الإجمالي الكلي بالملف) يبقى
-        // بدون تقييد، بس الصف اللي يظهر فعليًا بالتقرير المطبوع/
-        // المصدَّر هو المقيَّد بالفترة.
-        if (isRowLikelyNearPeriod(st.pending.dataRows, st.dateIdx, rowIdx, range, preferMonthFirst)) {
-          excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'badDate', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
-        }
+        // بناء على طلب صريح لاحق: صف "تاريخ غير مقروء" كان يظهر بتقرير
+        // الأخطاء فقط لو "قريب من الفترة المحددة" (isRowLikelyNearPeriod)،
+        // رغم إن العدّاد نفسه (يظهر بالبطاقة) يحسب كل صفوف الملف بدون
+        // قيد. هذا يخلّق فجوة: المستخدم يشوف رقم بالبطاقة (مثلًا "1")
+        // بدون أي طريقة يوصل للصف الفعلي عشان يصلحه — مؤكَّد كحالة
+        // واقعية حقيقية (بلاغ مباشر: "احتاج البيانات للتصحيح"). الصف
+        // الآن يظهر دائمًا بتقرير الأخطاء بغض النظر عن قربه من الفترة،
+        // متطابق تمامًا مع العدّاد.
+        excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'badDate', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), nearPeriod: isRowLikelyNearPeriod(st.pending.dataRows, st.dateIdx, rowIdx, range, preferMonthFirst) });
         return;
       } else if (dt < range.from || dt > range.to) {
         // Before giving up on this row, check if it's a day/month swap
@@ -19814,6 +19810,11 @@ function collectDataEntryErrorsReport(range) {
         id: er.rawIdValue || er.num || '—',
         sheetRow: er.sheetRow ?? '—',
         dateText: er.dateText || '—',
+        // بناء على طلب صريح: صفوف "تاريخ غير مقروء" البعيدة عن الفترة
+        // المحددة تُعرض الآن كاملة (بدل إخفائها كليًا) عشان يقدر
+        // المستخدم يوصل لها ويصلحها — بس توسم بوضوح "خارج الفترة" عشان
+        // ما تُفهم غلط كأنها ضمن الفترة الحالية تحديدًا.
+        periodNote: er.reason === 'badDate' && er.nearPeriod === false ? ' (خارج الفترة المحددة)' : '',
       })),
     });
   });
@@ -19843,7 +19844,7 @@ function exportDataEntryErrorsReport() {
         [t('idNumberLbl')]: dr.id,
         'رقم السطر بالملف': dr.sheetRow,
         'التاريخ (كما بالملف)': dr.dateText,
-        [t('errorTypeLbl')]: dr.reasonLabel,
+        [t('errorTypeLbl')]: dr.reasonLabel + (dr.periodNote || ''),
       });
     });
   });
@@ -20300,7 +20301,7 @@ function printDataEntryErrorsReportInner(range, skipPrint) {
         <tbody>
           ${h.detailRows.map(dr => `<tr style="page-break-inside:avoid">
             <td ${tdStyle}>${esc(String(dr.id))}</td><td ${tdStyle}>${esc(String(dr.sheetRow))}</td>
-            <td ${tdStyle}>${esc(dr.reasonLabel)}</td><td ${tdStyle}>${esc(dr.dateText)}</td>
+            <td ${tdStyle}>${esc(dr.reasonLabel)}${esc(dr.periodNote || '')}</td><td ${tdStyle}>${esc(dr.dateText)}</td>
           </tr>`).join('')}
         </tbody>
       </table>` : '';
