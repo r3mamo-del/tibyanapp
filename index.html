@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.13.0</span>
+  <span id="app-version">الإصدار 8.13.1</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -9466,7 +9466,8 @@ function collectReportScanRowsUncached(range) {
         return;
       }
       const gender = genderEarly;
-      const candidate = { num, hospital: name, dateStr, dateCell, dateObj, biradRaw, category, age, gender, excludeReason: (st.biradIdx >= 0 && category === null) ? 'noResult' : null, row: r };
+      const facilityRaw = st.facilityIdx >= 0 ? String(r[st.facilityIdx] ?? '').trim() : '';
+      const candidate = { num, hospital: name, dateStr, dateCell, dateObj, biradRaw, category, age, gender, facilityRaw, excludeReason: (st.biradIdx >= 0 && category === null) ? 'noResult' : null, row: r };
 
       const existing = byNum.get(num);
       if (!existing) { byNum.set(num, candidate); return; }
@@ -9494,7 +9495,22 @@ function collectReportScanRowsUncached(range) {
         return null; // neither is uniquely positive/definitive — fall through to date-based logic
       };
       if (existing.hospital !== name) {
-        const existingIsEarlierForReport = existing.dateObj && (!candidate.dateObj || existing.dateObj <= candidate.dateObj);
+        // بناء على طلب صريح مع دليل قاطع من ملف فعلي (الدرعية/حريملاء):
+        // لو تطابق التاريخ بالضبط بين مستشفيين، نتحقق أول شي هل أحدهم
+        // مذكور صراحة كمصدر تحويل للثاني بعمود "المستشفى والمراكز
+        // المحول منها" — المصدر الأصلي يفوز بالملكية، بدل الاعتماد على
+        // ترتيب المستشفيات بالقائمة عند التعادل التام بالتاريخ.
+        const sameDayTie = existing.dateObj && candidate.dateObj && existing.dateObj.getTime() === candidate.dateObj.getTime();
+        let existingIsEarlierForReport;
+        if (sameDayTie) {
+          const existingRefersToCandidate = detectReferredFromHospital(existing.facilityRaw, existing.hospital) === name;
+          const candidateRefersToExisting = detectReferredFromHospital(candidate.facilityRaw, name) === existing.hospital;
+          if (existingRefersToCandidate) existingIsEarlierForReport = false; // existing's row names candidate's hospital as source -> candidate wins
+          else if (candidateRefersToExisting) existingIsEarlierForReport = true; // candidate's row names existing's hospital as source -> existing keeps ownership
+          else existingIsEarlierForReport = true; // no referral evidence either way — fall back to list-order default (existing processed first)
+        } else {
+          existingIsEarlierForReport = existing.dateObj && (!candidate.dateObj || existing.dateObj <= candidate.dateObj);
+        }
         crossHospitalDupes.push({ num, hospitals: [existing.hospital, name], countedUnder: existingIsEarlierForReport ? existing.hospital : name });
         // Cross-hospital: the case COUNTS under whichever hospital saw the
         // patient FIRST (earliest exam date) — that's who actually
@@ -9506,7 +9522,7 @@ function collectReportScanRowsUncached(range) {
         // diagnosis is real new information, even if it happened at the
         // other hospital, so it shouldn't be silently dropped just
         // because that hospital doesn't get credit for the count.
-        const existingIsEarlier = existing.dateObj && (!candidate.dateObj || existing.dateObj <= candidate.dateObj);
+        const existingIsEarlier = existingIsEarlierForReport;
         const ownerRecord = existingIsEarlier ? existing : candidate;
         const resultAwarePick = pickResultAware(existing, candidate);
         const latestIsCandidate = candidate.dateObj && (!existing.dateObj || candidate.dateObj >= existing.dateObj);
@@ -17552,6 +17568,35 @@ function classifySpecificCenter(raw) {
   return null;
 }
 
+// يحدد اسم مستشفى القولون المذكور صراحة بعمود "المستشفى والمراكز المحول
+// منها" (متوفر بملف الدرعية تحديدًا — يوثّق أي حالة وصلته كإحالة من
+// مركز صحي تابع لمستشفى ثاني). بناء على طلب صريح مع دليل قاطع من ملف
+// فعلي على درايف: حالتين بملف الدرعية ("Hurymala PHC"، "Al-qareenah PHC
+// Hurymala") كانتا فعليًا فحوصات أصلية بحريملاء، محوَّلة للدرعية بس
+// لتنسيق موعد منظار — بدون طابع زمني حقيقي بالدرعية (خلاف باقي الصفوف)،
+// يؤكد إنها سجل تنسيق إداري مو فحص مستقل. تُستخدم لحل تعارض الملكية
+// بين مستشفيين بنفس التاريخ بالضبط — المصدر الأصلي يفوز، مو ترتيب
+// القائمة.
+const COLON_HOSPITAL_NAME_PATTERNS = {
+  'الدرعية': ['diriyah', 'dereyah'],
+  'الدوادمي': ['dawadmi', 'dawadimi'],
+  'شقراء': ['shaqra', 'shaqraa'],
+  'حريملاء': ['harimala', 'hurymala', 'huraymila', 'huraimala'],
+  'عفيف': ['afif'],
+  'البجادية': ['bijadiyah', 'bujadiyah', 'bejadiyah'],
+  'ساجر': ['sajir', 'sajer'],
+  'ثادق': ['thadiq', 'thadig'],
+  'مرات': ['muraat', 'marat'],
+};
+function detectReferredFromHospital(rawValue, excludeHospital) {
+  const s = String(rawValue ?? '').trim().toLowerCase();
+  if (!s) return null;
+  for (const [hospName, patterns] of Object.entries(COLON_HOSPITAL_NAME_PATTERNS)) {
+    if (hospName === excludeHospital) continue; // ما نطابق اسم نفس المستشفى اللي فيه الصف
+    if (patterns.some(p => s.includes(p))) return hospName;
+  }
+  return null;
+}
 function classifyFacilityValue(raw) {
   const s = String(raw ?? '').trim();
   if (!s) return 'unspecified';
@@ -18740,8 +18785,9 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
     if (ageOutOfRange) { ageExcluded++; excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'ageExcluded', extra: age, sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) }); return; }
     const facility = st.facilityIdx >= 0 ? classifyFacilityValue(r[st.facilityIdx]) : null;
     const specificCenter = facility === 'center' && st.facilityIdx >= 0 ? classifySpecificCenter(r[st.facilityIdx]) : null;
+    const facilityRaw = st.facilityIdx >= 0 ? String(r[st.facilityIdx] ?? '').trim() : '';
     const gender = st.genderIdx >= 0 ? String(r[st.genderIdx] ?? '').trim() : '';
-    const candidate = { num, hospital: name, dateStr, dateCell, dateObj, biradRaw, category, age, facility, specificCenter, gender, excludeReason: (st.biradIdx >= 0 && category === null) ? 'noResult' : null, row: r };
+    const candidate = { num, hospital: name, dateStr, dateCell, dateObj, biradRaw, category, age, facility, specificCenter, facilityRaw, gender, excludeReason: (st.biradIdx >= 0 && category === null) ? 'noResult' : null, row: r };
 
     const existing = byNum.get(num);
     if (!existing) { byNum.set(num, candidate); return; }
@@ -20510,12 +20556,28 @@ function collectReportExcludedNotesData(range, moduleKeyOverride) {
       numToEntries.forEach((entries, num) => {
         if (entries.length < 2) return;
         // Earliest exam date owns the case — same rule collectReportScanRows()
-        // uses for the main report table, for consistency.
+        // uses for the main report table, for consistency. بناء على طلب
+        // صريح مع دليل قاطع من ملف فعلي (الدرعية/حريملاء): لو تطابق
+        // التاريخ بالضبط بين مستشفيين، عمود "المستشفى والمراكز المحول
+        // منها" (لو موجود ومذكور فيه اسم المستشفى الثاني صراحة) يوضّح
+        // المصدر الأصلي الحقيقي — يفوز بالملكية بدل الاعتماد على ترتيب
+        // القائمة العشوائي عند التعادل التام بالتاريخ.
         let ownerEntry = entries[0];
-        entries.forEach(e => {
-          const eIsEarlier = e.caseObj.dateObj && (!ownerEntry.caseObj.dateObj || e.caseObj.dateObj <= ownerEntry.caseObj.dateObj);
+        for (let i = 1; i < entries.length; i++) {
+          const e = entries[i];
+          const ownerHospName = totalsRows[ownerEntry.hospitalIdx].hospitalRaw;
+          const eHospName = totalsRows[e.hospitalIdx].hospitalRaw;
+          const sameDay = e.caseObj.dateObj && ownerEntry.caseObj.dateObj &&
+            e.caseObj.dateObj.getTime() === ownerEntry.caseObj.dateObj.getTime();
+          if (sameDay) {
+            const ownerRefersToE = detectReferredFromHospital(ownerEntry.caseObj.facilityRaw, ownerHospName) === eHospName;
+            const eRefersToOwner = detectReferredFromHospital(e.caseObj.facilityRaw, eHospName) === ownerHospName;
+            if (ownerRefersToE) { ownerEntry = e; continue; }
+            if (eRefersToOwner) continue; // owner keeps ownership — e's own row names owner's hospital as the true source
+          }
+          const eIsEarlier = e.caseObj.dateObj && (!ownerEntry.caseObj.dateObj || e.caseObj.dateObj < ownerEntry.caseObj.dateObj);
           if (eIsEarlier) ownerEntry = e;
-        });
+        }
         entries.forEach(e => {
           if (e === ownerEntry) return;
           const loserHospital = totalsRows[e.hospitalIdx];
