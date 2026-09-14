@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.11.7</span>
+  <span id="app-version">الإصدار 8.11.8</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -3807,6 +3807,7 @@ const I18N = {
     btnPrintDataErrors: "Print Errors Report (PDF)",
     badDateLbl: "Unreadable Date",
     dateAmbiguousShortLbl: "Date Needs Correction",
+    invalidResultShortLbl: "Unreadable Result",
     totalInFileLbl: "Total in File (Unfiltered)",
     dataErrorsTotalLbl: "Total Errors",
     errorTypeLbl: "Error Type",
@@ -4589,6 +4590,7 @@ const I18N = {
     btnPrintDataErrors: "طباعة تقرير الأخطاء (PDF)",
     badDateLbl: "تاريخ غير مقروء",
     dateAmbiguousShortLbl: "التاريخ يحتاج تصحيح",
+    invalidResultShortLbl: "نتيجة غير مفهومة",
     totalInFileLbl: "إجمالي كل الملف (بدون فلترة)",
     dataErrorsTotalLbl: "إجمالي الأخطاء",
     errorTypeLbl: "نوع الخطأ",
@@ -18677,10 +18679,20 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
     if (auditRec) {
       auditDuplicatesRemoved++;
       const prevExamDate = parseCellDate(auditRec.date, auditRec.preferMonthFirst);
+      // بناء على طلب صريح: شفافية كاملة لمصدر كل مطابقة "مفحوص سابقًا"
+      // عشان يقدر المستخدم يتحقق بنفسه من صحتها — هل المطابقة صارت مع
+      // الملف المرجعي المركزي (ملف التدقيق المستقل)، أو مع ملف مستشفى
+      // آخر مرفوع حاليًا، أو حتى نفس المستشفى بتاريخ مختلف داخل ملفه
+      // الحالي. auditRec.row موجود فقط للمصدر الثالث (ملفات المستشفيات
+      // الحيّة)؛ غيابه يعني المصدر المركزي (Source 1+2).
+      const matchSource = auditRec.row
+        ? `${auditRec.hospital === name ? 'نفس الملف' : 'ملف ' + hospitalDisplayName(auditRec.hospital)} (مباشر)`
+        : 'الملف المرجعي المركزي (ملف التدقيق)';
       excludedRows.push({
         hospital: name, num, rawIdValue: num, dateText: c.dateStr, reason: 'auditDuplicate',
         prevExamDateText: prevExamDate ? formatDateForExport(prevExamDate) : (auditRec.date ? String(auditRec.date) : '—'),
         sheetRow: c.row ? st.pending.dataRows.indexOf(c.row) + 2 : '—',
+        matchSource,
       });
       return;
     }
@@ -18787,6 +18799,7 @@ function buildDetailedStatsCardHtml(res, title, brandLine, hospitalName, categor
           ${statBox('var(--warn)', t('kpiWaitingResults'), res.pendingResultCount || 0)}
           ${statBox('var(--warn)', t('badDateLbl'), res.badDate || 0)}
           ${statBox('var(--warn)', t('dateAmbiguousShortLbl'), res.dateAmbiguousCount || 0)}
+          ${statBox('var(--warn)', t('invalidResultShortLbl'), res.invalidResultCount || 0)}
         </div>
         ${categoryBoxesHtml ? `<div class="dr-cat-lbl" style="font-size:9.5px">${t('positiveCasesLbl')}</div><div class="dr-cat-grid" style="grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:8px">${categoryBoxesHtml}</div>` : ''}
         ${genderHtml}
@@ -20354,6 +20367,7 @@ function collectReportExcludedNotesData(range, moduleKeyOverride) {
         prevExamDateText: (er.reason === 'auditDuplicate' || er.reason === 'duplicate') ? (er.prevExamDateText || '—') : '',
         age: er.extra != null ? er.extra : '',
         sheetRow: er.sheetRow ?? '',
+        matchSource: er.matchSource || '',
       });
     });
   });
@@ -20820,12 +20834,12 @@ function printReportExcludedRows(skipPrint, overrideRange) {
     <table class="report-table" ${tableStyle}>
       <thead><tr>
         <th ${thStyle}>${t('hospitalNameLbl')}</th><th ${thStyle}>رقم السطر بالملف</th><th ${thStyle}>${isAllScope ? 'رقم الهوية (آخر 4 أرقام)' : t('idNumberLbl')}</th><th ${thStyle}>التاريخ بالملف</th>
-        <th ${thStyle}>السبب</th><th ${thStyle}>العمر</th><th ${thStyle}>الفحص السابق</th>
+        <th ${thStyle}>السبب</th><th ${thStyle}>العمر</th><th ${thStyle}>الفحص السابق</th><th ${thStyle}>مصدر التطابق</th>
       </tr></thead>
       <tbody>
         ${excludedAllRows.map(er => `<tr>
           <td ${tdStyle}>${esc(er.hospital)}</td><td ${tdStyle}>${esc(String(er.sheetRow ?? '—'))}</td><td ${tdStyle}>${esc(isAllScope ? maskId(er.id) : String(er.id))}</td><td ${tdStyle}>${esc(er.dateText)}</td>
-          <td ${tdStyle}>${esc(er.reasonLabel)}</td><td ${tdStyle}>${er.age !== '' && er.age != null ? esc(String(er.age)) : '—'}</td><td ${tdStyle}>${esc(er.prevExamDateText || '—')}</td>
+          <td ${tdStyle}>${esc(er.reasonLabel)}</td><td ${tdStyle}>${er.age !== '' && er.age != null ? esc(String(er.age)) : '—'}</td><td ${tdStyle}>${esc(er.prevExamDateText || '—')}</td><td ${tdStyle}>${esc(er.matchSource || '—')}</td>
         </tr>`).join('')}
       </tbody>
     </table>` : `<div style="text-align:center; color:var(--muted); padding:20px">لا توجد سجلات مستبعدة بهذه الفترة</div>`;
