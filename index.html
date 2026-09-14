@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.12.0</span>
+  <span id="app-version">الإصدار 8.12.1</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -9004,16 +9004,30 @@ function isRowLikelyNearPeriod(dataRows, colIdx, rowIdx, range, preferMonthFirst
   if (colIdx < 0) return true; // no date column at all — can't judge, so don't hide it
   const lo = new Date(range.from); lo.setDate(lo.getDate() - PERIOD_PROXIMITY_BUFFER_DAYS);
   const hi = new Date(range.to); hi.setDate(hi.getDate() + PERIOD_PROXIMITY_BUFFER_DAYS);
+  // بناء على طلب صريح: كانت الدالة ترجع القرار بناءً على **أول** جار
+  // قابل للقراءة تلقى (حتى لو بمسافة صف وحد بس)، بدون ما تكمل فحص باقي
+  // نافذة الـ40 صف. بملف تراكمي (سجلات قديمة وجديدة مختلطة، مو مرتبة
+  // زمنيًا بالضرورة)، أول جار ممكن يكون سجل قديم غير ذي صلة بالمصادفة —
+  // فترجع الدالة "بعيد عن الفترة" غلط، حتى لو جيران ثانين بنفس النافذة
+  // يثبتون العكس. مؤكَّد كحالة واقعية حقيقية (بلاغ مباشر: حالات فعليًا
+  // ضمن الفترة كانت تختفي من تقرير الأخطاء). الحل: نفحص **كل** الجيران
+  // القابلين للقراءة بكامل النافذة (لين 40 صف)، ونرجع "قريب من الفترة"
+  // لو **أي وحد منهم** يقع ضمن الفترة — أقوى بكثير من الاعتماد على أول
+  // جار بس، ويستغل نافذة البحث الواسعة أصلًا بدل تجاهلها فعليًا.
+  let sawAnyReadableNeighbor = false;
   for (let off = 1; off <= PERIOD_PROXIMITY_WINDOW; off++) {
     for (const j of [rowIdx - off, rowIdx + off]) {
       if (j < 0 || j >= dataRows.length) continue;
       const d = parseCellDate(dataRows[j][colIdx], preferMonthFirst);
       if (d && isPlausibleExamDate(d.toISOString())) {
-        return d >= lo && d <= hi;
+        sawAnyReadableNeighbor = true;
+        if (d >= lo && d <= hi) return true;
       }
     }
   }
-  return false; // no readable date anywhere nearby — no evidence this row is from this period
+  // ولا جار (من بين كل الجيران القابلين للقراءة بالنافذة كاملة) يقع
+  // ضمن الفترة — أو ما فيه أي جار قابل للقراءة إطلاقًا بكل النافذة.
+  return false;
 }
 // Detects the specific data-entry mistake just confirmed in a real file:
 // someone types a date meaning MM/DD (e.g. "07/01" for July 1st) into a
@@ -18511,15 +18525,15 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
         // "إجمالي الإدخالات ضمن الفترة" since we can't actually confirm
         // it belongs to this period at all.
         badDate++;
-        // بناء على طلب صريح لاحق: صف "تاريخ غير مقروء" كان يظهر بتقرير
-        // الأخطاء فقط لو "قريب من الفترة المحددة" (isRowLikelyNearPeriod)،
-        // رغم إن العدّاد نفسه (يظهر بالبطاقة) يحسب كل صفوف الملف بدون
-        // قيد. هذا يخلّق فجوة: المستخدم يشوف رقم بالبطاقة (مثلًا "1")
-        // بدون أي طريقة يوصل للصف الفعلي عشان يصلحه — مؤكَّد كحالة
-        // واقعية حقيقية (بلاغ مباشر: "احتاج البيانات للتصحيح"). الصف
-        // الآن يظهر دائمًا بتقرير الأخطاء بغض النظر عن قربه من الفترة،
-        // متطابق تمامًا مع العدّاد.
-        excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'badDate', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2), nearPeriod: isRowLikelyNearPeriod(st.pending.dataRows, st.dateIdx, rowIdx, range, preferMonthFirst) });
+        // بناء على طلب صريح: رجّعنا قيد "قريب من الفترة" (كان الوضع
+        // السابق أدق، النسخة اللي عرضت كل شي بدون قيد أظهرت تواريخ
+        // قديمة غير مرتبطة). السبب الحقيقي وراء اختفاء حالات ضمن الفترة
+        // فعليًا: خلل بدالة isRowLikelyNearPeriod نفسها (تعتمد أول جار
+        // بس بدل فحص النافذة كاملة) — انصلح هناك مباشرة. القيد هنا
+        // يستخدم النسخة المصلَّحة الآن.
+        if (isRowLikelyNearPeriod(st.pending.dataRows, st.dateIdx, rowIdx, range, preferMonthFirst)) {
+          excludedRows.push({ hospital: name, num: num || rawIdOf(r), rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'badDate', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
+        }
         return;
       } else if (dt < range.from || dt > range.to) {
         // Before giving up on this row, check if it's a day/month swap
@@ -19810,11 +19824,6 @@ function collectDataEntryErrorsReport(range) {
         id: er.rawIdValue || er.num || '—',
         sheetRow: er.sheetRow ?? '—',
         dateText: er.dateText || '—',
-        // بناء على طلب صريح: صفوف "تاريخ غير مقروء" البعيدة عن الفترة
-        // المحددة تُعرض الآن كاملة (بدل إخفائها كليًا) عشان يقدر
-        // المستخدم يوصل لها ويصلحها — بس توسم بوضوح "خارج الفترة" عشان
-        // ما تُفهم غلط كأنها ضمن الفترة الحالية تحديدًا.
-        periodNote: er.reason === 'badDate' && er.nearPeriod === false ? ' (خارج الفترة المحددة)' : '',
       })),
     });
   });
@@ -19844,7 +19853,7 @@ function exportDataEntryErrorsReport() {
         [t('idNumberLbl')]: dr.id,
         'رقم السطر بالملف': dr.sheetRow,
         'التاريخ (كما بالملف)': dr.dateText,
-        [t('errorTypeLbl')]: dr.reasonLabel + (dr.periodNote || ''),
+        [t('errorTypeLbl')]: dr.reasonLabel,
       });
     });
   });
@@ -20301,7 +20310,7 @@ function printDataEntryErrorsReportInner(range, skipPrint) {
         <tbody>
           ${h.detailRows.map(dr => `<tr style="page-break-inside:avoid">
             <td ${tdStyle}>${esc(String(dr.id))}</td><td ${tdStyle}>${esc(String(dr.sheetRow))}</td>
-            <td ${tdStyle}>${esc(dr.reasonLabel)}${esc(dr.periodNote || '')}</td><td ${tdStyle}>${esc(dr.dateText)}</td>
+            <td ${tdStyle}>${esc(dr.reasonLabel)}</td><td ${tdStyle}>${esc(dr.dateText)}</td>
           </tr>`).join('')}
         </tbody>
       </table>` : '';
