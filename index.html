@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.11.8</span>
+  <span id="app-version">الإصدار 8.11.9</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -8741,7 +8741,7 @@ function isAuditDuplicateWithinYear(num, auditByNum, reportRangeFrom, currentHos
   // source silently overriding another's date can no longer hide a
   // genuine match.
   //
-  // SELF-MATCH GUARDS (ثلاثة، بالترتيب حسب النطاق):
+  // SELF-MATCH GUARDS (أربعة، بالترتيب حسب النطاق):
   //   1) Source 3 exact row identity — see buildAuditByNum above.
   //   2) Source 1+2 (auto-pushed central audit records): only excluded
   //      when BOTH the hospital AND the calendar day match the case
@@ -8751,9 +8751,23 @@ function isAuditDuplicateWithinYear(num, auditByNum, reportRangeFrom, currentHos
   //   3) نفس التاريخ لكن بترتيب يوم/شهر معكوس (isDayMonthSwapOfSameDate) —
   //      بغض النظر عن المستشفى — نفس الفحص بالضبط مقروء بصيغتين
   //      مختلفتين، مو تكرار حقيقي بعد سنة. مؤكَّد كحالة واقعية حقيقية.
+  //   4) Source 3 نفس المستشفى بالكامل (بغض النظر عن التاريخ) — بناء على
+  //      طلب صريح مع دليل مباشر (عمود "مصدر التطابق" المضاف بالنسخة
+  //      السابقة كشف إن 100% من حالات "مفحوص سابقًا" بمستشفى معيّن
+  //      مصدرها "نفس الملف"): مستشفيات ترفع نفس الملف كل فترة بشكل
+  //      تراكمي (تضيف الجديد فوق القديم بدون حذفه، بدل ملف جديد كل مرة)
+  //      — فسجلات الأشهر الماضية تبقى بالملف للأبد، وSource 3 يفهرس كل
+  //      صف بالملف الحالي بدون أي قيد فترة (بعكس باقي التقرير)، فيلتقط
+  //      أي ظهور سابق لنفس رقم الهوية بنفس الملف ويعتبره خطأً "فحص سابق"
+  //      حتى لو كان مجرد سجل قديم باقٍ، لا فحص فعلي متكرر. التكرار
+  //      الحقيقي داخل نفس الرفعة يبقى مكشوف عادي عبر فحص "مكرر" المنفصل
+  //      (duplicatesRemoved، يحتفظ بآخر سجل). الاعتماد هنا يصير فقط على
+  //      الملف المرجعي المركزي (Source 1+2) — المصمَّم أصلًا لتتبّع
+  //      الفحوصات عبر فترات طويلة ومو عرضة لنفس قيد الملفات التراكمية.
 
   return recs.find(rec => {
     if (currentRow && rec.row === currentRow) return false;
+    if (currentHospital && rec.hospital === currentHospital && rec.row) return false;
     const d = parseCellDate(rec.date, rec.preferMonthFirst);
     if (currentHospital && currentDateObj && rec.hospital === currentHospital && sameCalendarDay(d, currentDateObj)) return false;
     if (currentDateObj && isDayMonthSwapOfSameDate(d, currentDateObj)) return false;
