@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.12.2</span>
+  <span id="app-version">الإصدار 8.12.3</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -4660,6 +4660,7 @@ const I18N = {
     previouslyScreenedLbl: "مفحوص سابقاً",
     outsideAgeRangeLbl: "خارج الفئة العمرية",
     kpiWaitingResults: "حالات في انتظار النتائج",
+    allHospitalsOption: "كل المستشفيات",
     netFinalLbl: "الصافي النهائي",
     detailedReportFileName: "تقرير_تفصيلي",
     fromWord: "من",
@@ -18647,7 +18648,17 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
     const ageOutOfRange = st.ageIdx >= 0 && (ageForGating === null || ageForGating < modCfg.ageMin || ageForGating > modCfg.ageMax);
     // الدرعية-only extra field completeness checks — same period-scoping fix.
     if (name === 'الدرعية') {
-      if (st.diriyahRiskGroupIdx >= 0 && !String(r[st.diriyahRiskGroupIdx] ?? '').trim()) {
+      // بناء على طلب صريح: بلاغ مباشر إن هذي الفحوصات صارت تطلع بأعداد
+      // ضخمة (527 خطأ!) تخلي التقرير يبان كأنه كشف كامل للحالات بدل
+      // تقرير أخطاء مركّز. السبب: استثناء "تجاهل الفحص لو الحالة أصلًا
+      // مستبعدة بسبب العمر" كان مطبَّق على فحص واحد بس (عامل الخطورة)،
+      // بينما الفحوصات الثلاثة الباقية (فئة الخطورة، أداة الفحص، تاريخ
+      // العينة) ما فيها نفس الاستثناء — فكل حالة خارج الفئة العمرية
+      // (مستبعدة أصلًا، ما تدخل بالتقرير النهائي) تولّد 3 إشعارات زيادة
+      // بلا أي فايدة عملية (نفس المنطق الموثَّق أصلًا بتعليق عامل
+      // الخطورة، بس ما طُبِّق على الباقي). طبّقنا نفس الاستثناء على
+      // الأربعة كلهم الآن.
+      if (st.diriyahRiskGroupIdx >= 0 && !ageOutOfRange && !String(r[st.diriyahRiskGroupIdx] ?? '').trim()) {
         dataErrorNotes.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'diriyahRiskGroupBlank', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
       }
       // Skipped when the case is already going to be excluded on age —
@@ -18657,10 +18668,10 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
       if (st.diriyahRiskFactorIdx >= 0 && !ageOutOfRange && !String(r[st.diriyahRiskFactorIdx] ?? '').trim()) {
         dataErrorNotes.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'diriyahRiskFactorBlank', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
       }
-      if (st.diriyahScreeningToolIdx >= 0 && !String(r[st.diriyahScreeningToolIdx] ?? '').trim()) {
+      if (st.diriyahScreeningToolIdx >= 0 && !ageOutOfRange && !String(r[st.diriyahScreeningToolIdx] ?? '').trim()) {
         dataErrorNotes.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'diriyahScreeningToolBlank', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
       }
-      if (st.diriyahKitDateIdx >= 0) {
+      if (st.diriyahKitDateIdx >= 0 && !ageOutOfRange) {
         const kitDateRaw = r[st.diriyahKitDateIdx];
         if (!String(kitDateRaw ?? '').trim()) {
           dataErrorNotes.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'diriyahKitDateBlank', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
@@ -18672,7 +18683,17 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
 
     const biradRaw = st.biradIdx >= 0 ? String(r[st.biradIdx] ?? '').trim() : '';
     const category = st.biradIdx >= 0 ? extractCategoryValue(r[st.biradIdx]) : null;
-    if (category === 'invalid') invalidResultCount++;
+    // بناء على طلب صريح: "نتيجة غير مفهومة" كانت تُحسب بعدّاد منفصل بس
+    // (invalidResultCount) بدون أي استبعاد فعلي — تبقى الحالة داخل
+    // الإجمالي الصافي (cases)، بس بدون تصنيف واضح (مو سلبي ولا إيجابي)،
+    // وبدون أي أثر بتقرير "السجلات المستبعدة" يوصل المستخدم لمكانها
+    // بالملف. الآن تُستبعد فعليًا من الإجمالي الصافي، وتُضاف لسجل
+    // السجلات المستبعدة بالتفصيل زي باقي أسباب الاستبعاد.
+    if (category === 'invalid') {
+      invalidResultCount++;
+      excludedRows.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'invalidResult', extra: biradRaw, sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
+      return;
+    }
     if (st.biradIdx >= 0 && category === null) {
       pendingResultCount++; // completely blank cell — waiting for a result, DIFFERENT from an explicitly invalid value
       dataErrorNotes.push({ hospital: name, num, rawIdValue: rawIdOf(r), dateText: dateStr, reason: 'resultBlank', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
@@ -19765,6 +19786,7 @@ const REPORT_EXCLUDED_REASON_LABELS = {
   badDate: 'تاريخ غير مقروء / غير معقول',
   invalidId: 'رقم هوية غير صحيح',
   ageExcluded: 'خارج الفئة العمرية',
+  invalidResult: 'نتيجة غير مفهومة',
   duplicate: 'مكرر داخل نفس الملف',
   crossHospitalDuplicate: 'مكرر بمستشفى آخر',
   auditDuplicate: 'مفحوص سابقًا (ملف التدقيق)',
