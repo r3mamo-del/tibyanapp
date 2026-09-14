@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.12.4</span>
+  <span id="app-version">الإصدار 8.12.5</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -9228,7 +9228,8 @@ function collectReportScanRowsUncached(range) {
         // يُحسب كـ"رقم هوية غير صحيح" بدل التجاهل الصامت الكامل.
         const hasOtherData = (st.dateIdx >= 0 && String(r[st.dateIdx] ?? '').trim()) ||
                               (st.biradIdx >= 0 && String(r[st.biradIdx] ?? '').trim());
-        if (hasOtherData) { rawEntryCount++; invalidIdCount++; }
+        // نفس تصحيح تقييد الفترة الموثَّق بـcollectReportScanRowsForHospitalUncached.
+        if (hasOtherData && isRowLikelyNearPeriod(st.pending.dataRows, st.dateIdx, rowIdx, range, preferMonthFirst)) { rawEntryCount++; invalidIdCount++; }
         return; // a genuinely blank row isn't an "entry" at all
       }
 
@@ -18358,7 +18359,13 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
       // بتقرير الأخطاء، عشان يوصله المستخدم ويصلحه.
       const hasOtherData = (st.dateIdx >= 0 && String(r[st.dateIdx] ?? '').trim()) ||
                             (st.biradIdx >= 0 && String(r[st.biradIdx] ?? '').trim());
-      if (hasOtherData) {
+      // بناء على طلب صريح: بلاغ مباشر مع ملف تقرير أخطاء فعلي — كان هذا
+      // الفحص يمسح الملف كامل بدون أي قيد فترة (بعكس كل أسباب الاستبعاد
+      // الثانية)، فيلتقط حالات هوية فاضية من شهور بعيدة كليًا عن الفترة
+      // المحددة (يونيو/يوليو ضد فترة سبتمبر)، ويضخّم "الإجمالي" بأرقام
+      // من فترات ثانية بالغلط. نفس القيد المستخدم أصلًا لـ"تاريخ غير
+      // مقروء" (isRowLikelyNearPeriod) يُطبَّق هنا الآن للاتساق الكامل.
+      if (hasOtherData && isRowLikelyNearPeriod(st.pending.dataRows, st.dateIdx, rowIdx, range, preferMonthFirst)) {
         rawEntryCount++;
         invalidIdCount++;
         excludedRows.push({ hospital: name, num: '—', rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'invalidId', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
