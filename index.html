@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.12.7</span>
+  <span id="app-version">الإصدار 8.13.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -20438,18 +20438,30 @@ function collectReportExcludedNotesData(range, moduleKeyOverride) {
   const scopeSel = document.getElementById('reportExcludedScopeSelect');
   const scope = scopeSel ? scopeSel.value : '__all__';
   const hospitalsForModule = moduleKeyOverride ? REPORT_HOSPITALS_BY_MODULE[moduleKeyOverride] : REPORT_HOSPITALS;
-  let hospitals = (scope === '__all__' || !scope) ? hospitalsForModule : [scope];
-  if (afifRestrictedMode) hospitals = hospitals.filter(h => h === RESTRICTED_HOSPITAL);
+  let displayHospitals = (scope === '__all__' || !scope) ? hospitalsForModule : [scope];
+  if (afifRestrictedMode) displayHospitals = displayHospitals.filter(h => h === RESTRICTED_HOSPITAL);
+  // بناء على طلب صريح: بلاغ مباشر مع دليل قاطع من ملفات فعلية على درايف
+  // (حريملاء) — فحص التكرار بين المستشفيات كان يشتغل فقط لو النطاق
+  // "كل المستشفيات"، فيتخطّى بالكامل لو المستخدم يعرض مستشفى وحد بس.
+  // هذا يخفي حالات محوَّلة فعليًا لمستشفى آخر (نفس رقم الهوية موجود
+  // بملف الدرعية كمريض محوَّل من مركز حريملاء الصحي) — فيطلع "الصافي
+  // النهائي" أكبر من الصحيح (بيحسب نفس المريض مرتين بين المستشفيات).
+  // الحل: نفحص دائمًا **كل** مستشفيات الوحدة (afifRestrictedMode تبقى
+  // استثناء — جلستها مقيَّدة أصلًا بمستشفى وحد بتصميمها)، بغض النظر عن
+  // نطاق العرض المختار — العرض يبقى مقيَّد بالنطاق، لكن حساب "الصافي
+  // النهائي" يصير دائمًا صحيحًا ومتّسقًا مع "التقرير التفصيلي".
+  const scanHospitals = afifRestrictedMode ? displayHospitals : hospitalsForModule;
 
   const totalsRows = [];
   const excludedAllRows = [];
   let anyFile = false;
   const sharedAuditByNum2 = buildAuditByNum();
 
-  hospitals.forEach(name => {
+  scanHospitals.forEach(name => {
     const st = reportState[name];
     if (!st.pending || st.colIdx < 0) return;
-    anyFile = true;
+    const isDisplayed = displayHospitals.includes(name);
+    if (isDisplayed) anyFile = true;
     const res = collectReportScanRowsForHospital(name, range, sharedAuditByNum2, moduleKeyOverride);
     if (res.error) return;
     totalsRows.push({
@@ -20460,30 +20472,34 @@ function collectReportExcludedNotesData(range, moduleKeyOverride) {
       ageExcluded: res.ageExcluded, badDate: res.badDate, dateAmbiguousCount: res.dateAmbiguousCount,
       pendingResultCount: res.pendingResultCount, netFinal: res.cases.length,
       cases: res.cases, // kept temporarily for the cross-hospital pass below
+      isDisplayed,
     });
-    res.excludedRows.forEach(er => {
-      excludedAllRows.push({
-        hospital: hospitalDisplayName(name),
-        id: er.rawIdValue || er.num,
-        dateText: er.dateText || '—',
-        reasonLabel: REPORT_EXCLUDED_REASON_LABELS[er.reason] || er.reason,
-        prevExamDateText: (er.reason === 'auditDuplicate' || er.reason === 'duplicate') ? (er.prevExamDateText || '—') : '',
-        age: er.extra != null ? er.extra : '',
-        sheetRow: er.sheetRow ?? '',
-        matchSource: er.matchSource || '',
+    if (isDisplayed) {
+      res.excludedRows.forEach(er => {
+        excludedAllRows.push({
+          hospital: hospitalDisplayName(name),
+          id: er.rawIdValue || er.num,
+          dateText: er.dateText || '—',
+          reasonLabel: REPORT_EXCLUDED_REASON_LABELS[er.reason] || er.reason,
+          prevExamDateText: (er.reason === 'auditDuplicate' || er.reason === 'duplicate') ? (er.prevExamDateText || '—') : '',
+          age: er.extra != null ? er.extra : '',
+          sheetRow: er.sheetRow ?? '',
+          matchSource: er.matchSource || '',
+        });
       });
-    });
+    }
   });
 
   // Cross-hospital duplicate pass — the per-hospital scan above cannot
   // see this on its own (each call starts a fresh, isolated tracking
   // map), so the same ID appearing in two different hospitals' files was
-  // silently going undetected. Only meaningful when scanning multiple
-  // hospitals together. Wrapped defensively — if this new logic throws
-  // for any reason, the rest of the report must still render rather than
-  // losing the whole section.
+  // silently going undetected. الآن يشتغل دائمًا (ما عاد مقيَّد بنطاق
+  // "كل المستشفيات") — لأنه لازم نعرف كل المستشفيات عشان نحدد الملكية
+  // الصحيحة، حتى لو العرض بالنهاية لمستشفى وحد بس. Wrapped defensively —
+  // if this new logic throws for any reason, the rest of the report must
+  // still render rather than losing the whole section.
   try {
-    if (scope === '__all__' || !scope) {
+    {
       const numToEntries = new Map(); // num -> [{hospitalIdx, caseObj}]
       totalsRows.forEach((tr, hospitalIdx) => {
         (tr.cases || []).forEach(c => {
@@ -20505,6 +20521,7 @@ function collectReportExcludedNotesData(range, moduleKeyOverride) {
           const loserHospital = totalsRows[e.hospitalIdx];
           loserHospital.duplicatesRemoved = (loserHospital.duplicatesRemoved || 0) + 1;
           loserHospital.netFinal = Math.max(0, (loserHospital.netFinal || 0) - 1);
+          if (!loserHospital.isDisplayed) return; // بيانات مستشفى مو معروض حاليًا — نحسبها بس ما نعرض تفاصيلها
           excludedAllRows.push({
             hospital: loserHospital.hospital,
             id: e.caseObj.num,
@@ -20520,8 +20537,15 @@ function collectReportExcludedNotesData(range, moduleKeyOverride) {
     console.error('collectReportExcludedNotesData: cross-hospital duplicate pass failed', e);
   }
   totalsRows.forEach(tr => { delete tr.cases; delete tr.hospitalRaw; }); // scratch fields, not part of the public shape
+  // بعد ما استخدمنا المستشفيات غير المعروضة بس لحساب التكرار الصحيح بين
+  // المستشفيات، نصفّيها الآن من النتيجة النهائية — العرض يبقى بالضبط
+  // بنفس النطاق اللي اختاره المستخدم، والفرق الوحيد إن "الصافي النهائي"
+  // المعروض صار محسوبًا بدقة (يأخذ بعين الاعتبار حالات محوَّلة لمستشفى
+  // ثاني حتى لو ذاك المستشفى نفسه مو ضمن نطاق العرض الحالي).
+  const finalTotalsRows = totalsRows.filter(tr => tr.isDisplayed);
+  finalTotalsRows.forEach(tr => { delete tr.isDisplayed; });
 
-  return { anyFile, totalsRows, excludedAllRows, scope, hospitals };
+  return { anyFile, totalsRows: finalTotalsRows, excludedAllRows, scope, hospitals: displayHospitals };
 }
 function exportReportExcludedRowsExcel() {
   const period = document.getElementById('reportPeriod').value;
