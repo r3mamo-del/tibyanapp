@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.13.1</span>
+  <span id="app-version">الإصدار 8.13.2</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -8649,22 +8649,15 @@ function mergeKeepingLatest(existing, incoming) {
 // only counts as a blocking duplicate if ITS OWN date falls within the last
 // year; an unreadable audit date can't be confirmed recent, so it does NOT
 // block the case (consistent with the single-ID search's duration logic).
-const _buildAuditByNumCache = new Map();
+const _buildAuditByNumCache = new Map(); // unused now — buildAuditByNum() no longer caches, kept only to avoid touching unrelated code elsewhere that might reference it
 function buildAuditByNum() {
-  // نفس نمط التخزين المؤقت المستخدم بـcollectReportScanRows — هذي الدالة
-  // تُستدعى 10 مرات منفصلة عبر الكود (مرة لكل استدعاء computeModuleAchievement
-  // ومشابهاتها)، وكل مرة تعيد فحص بيانات كل المستشفيات من الصفر رغم إن
-  // النتيجة نفسها بالضبط لو البيانات ما تغيّرت. تحسين أداء مهم لصفحة
-  // لوحة المؤشرات تحديدًا (أكتر صفحة تستدعيها بتكرار).
-  const cacheKey = `${currentModule}|${dataGenerationCounter}`;
-  const cached = _buildAuditByNumCache.get(cacheKey);
-  if (cached) return cached;
-  const result = buildAuditByNumUncached();
-  _buildAuditByNumCache.set(cacheKey, result);
-  if (_buildAuditByNumCache.size > 10) {
-    _buildAuditByNumCache.delete(_buildAuditByNumCache.keys().next().value);
-  }
-  return result;
+  // بناء على طلب صريح: نفس السبب الجذري اللي أثبتناه بدليل قاطع لـ
+  // collectReportScanRowsForHospital — التخزين المؤقت هنا كان يسبب
+  // احتمال تسليم نسخة قديمة من الملف المرجعي لاستدعاء يفترض إنه يجيب
+  // بيانات جديدة. إلغاء التخزين المؤقت نهائيًا لضمان الاتساق الكامل بين
+  // كل الأماكن اللي تعتمد على هذا الملف (البطاقة المصغّرة، تقرير
+  // السجلات المستبعدة، تقرير الحالات المكررة) — الدقة أهم من السرعة.
+  return buildAuditByNumUncached();
 }
 function buildAuditByNumUncached() {
   const map = new Map(); // num -> array of records from every source, not just the last one to write
@@ -18289,22 +18282,20 @@ function renderZoneReport(results, periodLabel, logoSrc) {
 function collectReportScanRowsForHospital(name, overrideRange, cachedAuditByNum, moduleKeyOverride) {
   const range = overrideRange || resolveReportRange(document.getElementById('reportPeriod').value);
   if (!range) return { error: 'range' };
-
-  // نفس فكرة التخزين المؤقت أعلاه — هذي الدالة تُستدعى لكل مستشفى على
-  // حدة بكل تقرير (5-9 استدعاءات فورية)، فتوفير الفحص المكرر هنا مهم
-  // بنفس القدر.
   const effectiveModuleKey = moduleKeyOverride || currentModule;
-  const cacheKey = `${effectiveModuleKey}|${name}|${range.from.getTime()}|${range.to.getTime()}|${dataGenerationCounter}`;
-  const cached = _collectReportScanRowsForHospitalCache.get(cacheKey);
-  if (cached) return cached;
-  const result = collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum, effectiveModuleKey);
-  _collectReportScanRowsForHospitalCache.set(cacheKey, result);
-  if (_collectReportScanRowsForHospitalCache.size > 60) {
-    _collectReportScanRowsForHospitalCache.delete(_collectReportScanRowsForHospitalCache.keys().next().value);
-  }
-  return result;
+  // بناء على طلب صريح: بلاغ مباشر مع دليل قاطع (لقطتين + تقرير مُصدَّر
+  // بنفس اللحظة بالضبط) — البطاقة المصغّرة و"السجلات المستبعدة" طلعتا
+  // رقمين مختلفين تمامًا لـ"مفحوص سابقًا" لنفس المستشفى ونفس الفترة في
+  // نفس الثانية. السبب الجذري: مفتاح التخزين المؤقت (cache) ما كان يشمل
+  // كائن الملف المرجعي (cachedAuditByNum) نفسه — فلو استدعاءين مختلفين
+  // مرّرا نسخ مختلفة من الملف المرجعي (حتى لو بنفس اللحظة تقريبًا)، أول
+  // استدعاء يخزّن نتيجته، والاستدعاء الثاني يرجع نفس النتيجة القديمة
+  // المخزَّنة بدل ما يحسب من جديد بالملف المرجعي الفعلي اللي مرّره هو.
+  // هذا تناقض خطير وغير مقبول لبيانات طبية. الحل الجذري: إلغاء التخزين
+  // المؤقت لهذي الدالة نهائيًا — الدقة والاتساق أهم بكثير من كسب أجزاء
+  // من الثانية بالسرعة هنا.
+  return collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum, effectiveModuleKey);
 }
-const _collectReportScanRowsForHospitalCache = new Map();
 function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum, moduleKeyOverride) {
   // بناء على طلب صريح: بلاغ مباشر مع صورة تؤكد إن حالات القولون بأعمار
   // 70-75 (ضمن نطاق القولون الصحيح 45-75) كانت تُستبعد "خارج الفئة
