@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.12.1</span>
+  <span id="app-version">الإصدار 8.12.2</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -9221,7 +9221,15 @@ function collectReportScanRowsUncached(range) {
 
     st.pending.dataRows.forEach((r, rowIdx) => {
       const num = normalizeNum(r[st.colIdx]);
-      if (!num) return; // a genuinely blank row isn't an "entry" at all
+      if (!num) {
+        // نفس الإصلاح الموثَّق بـcollectReportScanRowsForHospitalUncached —
+        // صف بهوية فاضية لكن ببيانات حقيقية بباقي الأعمدة (تاريخ/نتيجة)
+        // يُحسب كـ"رقم هوية غير صحيح" بدل التجاهل الصامت الكامل.
+        const hasOtherData = (st.dateIdx >= 0 && String(r[st.dateIdx] ?? '').trim()) ||
+                              (st.biradIdx >= 0 && String(r[st.biradIdx] ?? '').trim());
+        if (hasOtherData) invalidIdCount++;
+        return; // a genuinely blank row isn't an "entry" at all
+      }
 
       let dateStr = '', dateCell = null, dateObj = null, dateUnknown = false, dateEstimated = false;
       if (st.dateSwapOverrides && st.dateSwapOverrides.has(num)) {
@@ -18336,7 +18344,25 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
 
   st.pending.dataRows.forEach((r, rowIdx) => {
     const num = normalizeNum(r[st.colIdx]);
-    if (!num) return; // a genuinely blank row isn't an "entry" at all
+    if (!num) {
+      // بناء على طلب صريح: بلاغ مباشر مع ملف فعلي (شقراء، صف 852) —
+      // مريضة برقم هوية فاضٍ تمامًا، لكن بباقي الأعمدة (تاريخ الفحص،
+      // العمر، الجنس، النتيجة) معبَّاة كاملة وصحيحة. الفحص القديم يعتبر
+      // أي صف بدون هوية "مو حالة إطلاقًا" ويتجاهله بصمت كامل — حتى لو
+      // فيه بيانات حقيقية بباقي الأعمدة. هذا يخفي حالة حقيقية موجودة
+      // فعلًا بالملف، بدون أي تتبع أو إمكانية تصحيح. الآن نميّز: صف
+      // فاضي فعليًا (كل الأعمدة فاضية، غالبًا صف تعبئة تلقائي بالملف)
+      // يبقى يُتجاهل بصمت زي قبل، لكن صف عنده تاريخ أو نتيجة حقيقية
+      // (بيانات فعلية، بس ناقص الهوية) يُسجَّل كخطأ "رقم هوية غير صحيح"
+      // بتقرير الأخطاء، عشان يوصله المستخدم ويصلحه.
+      const hasOtherData = (st.dateIdx >= 0 && String(r[st.dateIdx] ?? '').trim()) ||
+                            (st.biradIdx >= 0 && String(r[st.biradIdx] ?? '').trim());
+      if (hasOtherData) {
+        invalidIdCount++;
+        excludedRows.push({ hospital: name, num: '—', rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'invalidId', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
+      }
+      return; // a genuinely blank row isn't an "entry" at all
+    }
 
     if (consentColIdx >= 0 && isRefusedValue(r[consentColIdx])) refusedCount++;
 
