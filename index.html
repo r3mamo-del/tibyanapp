@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.11.6</span>
+  <span id="app-version">الإصدار 8.11.7</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -3806,6 +3806,7 @@ const I18N = {
     dataEntryErrorsReportTitle: "Data Needing Correction",
     btnPrintDataErrors: "Print Errors Report (PDF)",
     badDateLbl: "Unreadable Date",
+    dateAmbiguousShortLbl: "Date Needs Correction",
     totalInFileLbl: "Total in File (Unfiltered)",
     dataErrorsTotalLbl: "Total Errors",
     errorTypeLbl: "Error Type",
@@ -4587,6 +4588,7 @@ const I18N = {
     dataEntryErrorsReportTitle: "بيانات تحتاج تصحيح",
     btnPrintDataErrors: "طباعة تقرير الأخطاء (PDF)",
     badDateLbl: "تاريخ غير مقروء",
+    dateAmbiguousShortLbl: "التاريخ يحتاج تصحيح",
     totalInFileLbl: "إجمالي كل الملف (بدون فلترة)",
     dataErrorsTotalLbl: "إجمالي الأخطاء",
     errorTypeLbl: "نوع الخطأ",
@@ -18783,6 +18785,8 @@ function buildDetailedStatsCardHtml(res, title, brandLine, hospitalName, categor
           ${statBox('var(--danger)', t('previouslyScreenedLbl'), res.auditDuplicatesRemoved)}
           ${statBox('var(--warn)', `${t('outsideAgeRangeLbl')}`, res.ageExcluded || 0)}
           ${statBox('var(--warn)', t('kpiWaitingResults'), res.pendingResultCount || 0)}
+          ${statBox('var(--warn)', t('badDateLbl'), res.badDate || 0)}
+          ${statBox('var(--warn)', t('dateAmbiguousShortLbl'), res.dateAmbiguousCount || 0)}
         </div>
         ${categoryBoxesHtml ? `<div class="dr-cat-lbl" style="font-size:9.5px">${t('positiveCasesLbl')}</div><div class="dr-cat-grid" style="grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:8px">${categoryBoxesHtml}</div>` : ''}
         ${genderHtml}
