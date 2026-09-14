@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.12.3</span>
+  <span id="app-version">الإصدار 8.12.4</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -9228,7 +9228,7 @@ function collectReportScanRowsUncached(range) {
         // يُحسب كـ"رقم هوية غير صحيح" بدل التجاهل الصامت الكامل.
         const hasOtherData = (st.dateIdx >= 0 && String(r[st.dateIdx] ?? '').trim()) ||
                               (st.biradIdx >= 0 && String(r[st.biradIdx] ?? '').trim());
-        if (hasOtherData) invalidIdCount++;
+        if (hasOtherData) { rawEntryCount++; invalidIdCount++; }
         return; // a genuinely blank row isn't an "entry" at all
       }
 
@@ -18359,6 +18359,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
       const hasOtherData = (st.dateIdx >= 0 && String(r[st.dateIdx] ?? '').trim()) ||
                             (st.biradIdx >= 0 && String(r[st.biradIdx] ?? '').trim());
       if (hasOtherData) {
+        rawEntryCount++;
         invalidIdCount++;
         excludedRows.push({ hospital: name, num: '—', rawIdValue: rawIdOf(r), dateText: rawDateOf(r), reason: 'invalidId', sheetRow: (st.pending.dataRowNumbers ? st.pending.dataRowNumbers[rowIdx] : rowIdx + 2) });
       }
