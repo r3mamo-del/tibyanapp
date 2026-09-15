@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.13.2</span>
+  <span id="app-version">الإصدار 8.13.3</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -18167,7 +18167,13 @@ function toggleHospDetail(i) {
   const el = document.getElementById('hosp-detail-' + i);
   if (el) el.style.display = (el.style.display === 'none' ? 'block' : 'none');
 }
-function pctClass(pct) {
+function pctClass(pct, target) {
+  // بناء على طلب صريح: لو المستهدف نفسه صفر (لسه ما انضاف للمستشفى)،
+  // النسبة المحسوبة صفر تلقائيًا وتلوَّن أحمر — كأنه أداء ضعيف، رغم إن
+  // المشكلة الحقيقية إداري بحت (نسيان إدخال مستهدف)، مو تقصير بالأداء
+  // الفعلي. تُلوَّن أخضر بدل هذا لحد ما يُدخَل المستهدف، للثدي والقولون
+  // معًا (نفس الدالة مشتركة بين الوحدتين).
+  if (!target) return 'pct-green';
   if (pct < 85) return 'pct-red';
   if (pct <= 95) return 'pct-yellow';
   return 'pct-green';
@@ -18226,7 +18232,9 @@ function renderZoneReport(results, periodLabel, logoSrc) {
 
     const hospitalsHtml = zoneHospitals.map(r => {
       const pct = r.target > 0 ? Math.round(r.achieved / r.target * 100) : 0;
-      const gaugeColor = pct >= 96 ? '#15803D' : (pct >= 85 ? '#B45309' : '#C81E1E');
+      // نفس الاستثناء الموثَّق أعلى (pctClass) — مستهدف صفر يعني "لسه ما
+      // انضاف"، مو أداء ضعيف، فيُلوَّن أخضر بدل أحمر.
+      const gaugeColor = !r.target ? '#15803D' : (pct >= 96 ? '#15803D' : (pct >= 85 ? '#B45309' : '#C81E1E'));
       return `
         <div class="hosp-mini-card" data-hospital="${esc(r.name)}">
           <div class="hosp-mini-title">${currentLang === 'en' ? esc(hospitalDisplayName(r.name)) : 'مستشفى ' + esc(r.name)}</div>
@@ -19691,7 +19699,7 @@ function generateReport(autoRefresh, overrideRange) {
         <td>${rem}</td>
         <td style="${r.hasBirad && r.positiveCount > 0 ? 'color:var(--danger);font-weight:700' : ''}">${posCell}</td>
         ${showBirad0 ? `<td>${birad0Cell}</td>` : ''}
-        <td><span class="pct-cell ${pctClass(pct)}">${pct}%</span></td>
+        <td><span class="pct-cell ${pctClass(pct, r.target)}">${pct}%</span></td>
       </tr>`;
     // Afif-only: break "عفيف"'s own total down into the hospital itself
     // + each PHC center, as indented sub-rows right under it — these are
@@ -19768,10 +19776,10 @@ function generateReport(autoRefresh, overrideRange) {
       <div class="report-bar-row">
         <div class="rb-label" style="cursor:pointer" onclick="toggleHospDetail(${i})"><span>${esc(hospitalDisplayName(r.name))} <span style="color:var(--muted); font-size:11px">▾</span></span><span>${pct}%</span></div>
         <div class="report-bar-track">
-          <div class="report-bar-fill ${pctClass(pct)}" style="width:${Math.min(100, pct)}%"></div>
+          <div class="report-bar-fill ${pctClass(pct, r.target)}" style="width:${Math.min(100, pct)}%"></div>
         </div>
         <div class="hosp-detail" id="hosp-detail-${i}" style="display:none">
-          <div class="hd-head"><span class="hd-name">${esc(hospitalDisplayName(r.name))}</span><span class="pct-cell ${pctClass(pct)}">${pct}%</span></div>
+          <div class="hd-head"><span class="hd-name">${esc(hospitalDisplayName(r.name))}</span><span class="pct-cell ${pctClass(pct, r.target)}">${pct}%</span></div>
           <div class="hd-grid">
             <div class="stat-box"><div class="stat-num">${r.target}</div><div class="stat-lbl">${t('targetLbl')}</div></div>
             <div class="stat-box"><div class="stat-num" style="color:var(--accent)">${r.achieved}</div><div class="stat-lbl">${t('achievedLbl')}</div></div>
