@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.13.3</span>
+  <span id="app-version">الإصدار 8.13.4</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -19744,7 +19744,7 @@ function generateReport(autoRefresh, overrideRange) {
         <td style="font-size:11.5px; color:var(--muted)">${f.n}</td>
         <td style="font-size:11.5px; color:var(--muted)">${f.target ? Math.max(0, f.target - f.n) : '—'}</td>
         <td colspan="${showBirad0 ? 2 : 1}"></td>
-        <td>${f.target ? `<span class="pct-cell ${pctClass(fPct)}" style="font-size:10.5px">${fPct}%</span>` : ''}</td>
+        <td>${f.target ? `<span class="pct-cell ${pctClass(fPct, f.target)}" style="font-size:10.5px">${fPct}%</span>` : ''}</td>
       </tr>`;
           }).join('');
         }
@@ -19761,7 +19761,7 @@ function generateReport(autoRefresh, overrideRange) {
       <td>${remaining}</td>
       <td>${anyBirad ? totalPositive : '—'}</td>
       ${showBirad0 ? `<td>${totalBirad0}</td>` : ''}
-      <td><span class="pct-cell ${pctClass(totalPct)}">${totalPct}%</span></td>
+      <td><span class="pct-cell ${pctClass(totalPct, totalTarget)}">${totalPct}%</span></td>
     </tr>`;
 
   // Horizontal bar chart — same per-hospital pct data as the table, laid
