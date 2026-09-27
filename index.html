@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.13.4</span>
+  <span id="app-version">الإصدار 8.13.5</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -20171,6 +20171,18 @@ function printColonIncompleteStepsChart() {
   const { fromDt, toDt } = getPositiveLogPeriodFilter();
   const range = { from: fromDt || new Date(2020, 0, 1), to: toDt || new Date() };
   const { byStep, detailsByHospital } = collectColonIncompleteStepBreakdown(range);
+  // كان يتجاهل تمامًا فلتر "المستشفى" الموجود بأعلى نفس الصفحة (مستخدَم
+  // بكل زر ثاني بهذي الصفحة — لوحة المؤشرات، الحالات غير المكتملة،
+  // القائمة المؤكدة...) ويطبع دائمًا كل المستشفيات — مؤكَّد كحالة واقعية
+  // حقيقية (بلاغ مباشر). الحل: نفس منطق الفلترة المستخدم بكل زر آخر هنا.
+  const hospitalScope = document.getElementById('positive-dashboard-print-scope')?.value || 'all';
+  const isAllScope = hospitalScope === 'all';
+  if (!isAllScope) {
+    Object.keys(byStep).forEach(k => {
+      byStep[k] = byStep[k][hospitalScope] ? { [hospitalScope]: byStep[k][hospitalScope] } : {};
+    });
+    Object.keys(detailsByHospital).forEach(h => { if (h !== hospitalScope) delete detailsByHospital[h]; });
+  }
   const stepOrder = ['notFollowedUp', 'consent', 'dateOsc', 'endoscopyDone', 'endoscopyDate', 'biopsyTaken', 'biopsyResult'];
   const totalCount = k => Object.values(byStep[k]).reduce((a, b) => a + b, 0);
   const grandTotal = stepOrder.reduce((s, k) => s + totalCount(k), 0);
@@ -20211,8 +20223,9 @@ function printColonIncompleteStepsChart() {
   }).join('');
 
   const container = document.getElementById('colon-reasons-print-only');
+  const titleSuffix = !isAllScope ? ` — ${hospitalDisplayName(hospitalScope)}` : ' — حسب المستشفى';
   container.innerHTML = `
-    ${buildPrintBrandHeaderHtml('أسباب عدم اكتمال حالات القولون — حسب المستشفى', `${fmtDateLocalized(range.from)} ${t('toWord')} ${fmtDateLocalized(range.to)}`)}
+    ${buildPrintBrandHeaderHtml('أسباب عدم اكتمال حالات القولون' + titleSuffix, `${fmtDateLocalized(range.from)} ${t('toWord')} ${fmtDateLocalized(range.to)}`)}
     <div style="display:flex; gap:10px; margin-bottom:16px">
       <div style="flex:1; text-align:center; background:#F4F6F9; border-radius:10px; padding:10px">
         <div style="font-size:18px; font-weight:800; color:#1B2333">${grandTotal}</div>
@@ -20299,6 +20312,18 @@ function printBreastIncompleteStepsChart() {
   const { fromDt, toDt } = getPositiveLogPeriodFilter();
   const range = { from: fromDt || new Date(2020, 0, 1), to: toDt || new Date() };
   const { byStep, detailsByHospital } = collectBreastIncompleteStepBreakdown(range);
+  // كان يتجاهل تمامًا فلتر "المستشفى" الموجود بأعلى نفس الصفحة (مستخدَم
+  // بكل زر ثاني بهذي الصفحة — لوحة المؤشرات، الحالات غير المكتملة،
+  // القائمة المؤكدة...) ويطبع دائمًا كل المستشفيات — مؤكَّد كحالة واقعية
+  // حقيقية (بلاغ مباشر). الحل: نفس منطق الفلترة المستخدم بكل زر آخر هنا.
+  const hospitalScope = document.getElementById('positive-dashboard-print-scope')?.value || 'all';
+  const isAllScope = hospitalScope === 'all';
+  if (!isAllScope) {
+    Object.keys(byStep).forEach(k => {
+      byStep[k] = byStep[k][hospitalScope] ? { [hospitalScope]: byStep[k][hospitalScope] } : {};
+    });
+    Object.keys(detailsByHospital).forEach(h => { if (h !== hospitalScope) delete detailsByHospital[h]; });
+  }
   const stepOrder = ['notFollowedUp', 'waitingProcedure', 'biopsyDate', 'finalDiagnosis'];
   const totalCount = k => Object.values(byStep[k]).reduce((a, b) => a + b, 0);
   const grandTotal = stepOrder.reduce((s, k) => s + totalCount(k), 0);
@@ -20338,8 +20363,9 @@ function printBreastIncompleteStepsChart() {
   }).join('');
 
   const container = document.getElementById('breast-reasons-print-only');
+  const titleSuffix = !isAllScope ? ` — ${hospitalDisplayName(hospitalScope)}` : ' — حسب المستشفى';
   container.innerHTML = `
-    ${buildPrintBrandHeaderHtml('أسباب عدم اكتمال حالات الثدي — حسب المستشفى', `${fmtDateLocalized(range.from)} ${t('toWord')} ${fmtDateLocalized(range.to)}`)}
+    ${buildPrintBrandHeaderHtml('أسباب عدم اكتمال حالات الثدي' + titleSuffix, `${fmtDateLocalized(range.from)} ${t('toWord')} ${fmtDateLocalized(range.to)}`)}
     <div style="display:flex; gap:10px; margin-bottom:16px">
       <div style="flex:1; text-align:center; background:#F4F6F9; border-radius:10px; padding:12px">
         <div style="font-size:20px; font-weight:800; color:#1B2333">${grandTotal}</div>
