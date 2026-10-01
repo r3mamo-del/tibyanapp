@@ -9648,8 +9648,22 @@ function exportColonMonthlyMinistryFile(cases, range, hospitalsUsed, duplicatesR
   const positiveAoa = [[null, 'Early Detection of Colorectal  Cancer'], ['Cluster:'], positiveHeader, ...positiveRows];
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(screenedAoa), 'Screend cases');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(positiveAoa), 'Positive cases');
+  const screenedWs = XLSX.utils.aoa_to_sheet(screenedAoa);
+  const positiveWs = XLSX.utils.aoa_to_sheet(positiveAoa);
+  // Same color scheme as the (verified) official Breast monthly template's
+  // two sheets — teal for the full screened list, green for the
+  // positive/recall sheet — applied here by consistency since no official
+  // Colon monthly template has been provided to verify against directly.
+  for (let col = 0; col < screenedHeader.length; col++) {
+    const addr = XLSX.utils.encode_cell({ r: 2, c: col });
+    if (screenedWs[addr]) screenedWs[addr].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '156082' } } };
+  }
+  for (let col = 0; col < positiveHeader.length; col++) {
+    const addr = XLSX.utils.encode_cell({ r: 2, c: col });
+    if (positiveWs[addr]) positiveWs[addr].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '008755' } } };
+  }
+  XLSX.utils.book_append_sheet(wb, screenedWs, 'Screend cases');
+  XLSX.utils.book_append_sheet(wb, positiveWs, 'Positive cases');
   xlsxSave(wb, MOD().ministryFileName);
 
   statusEl.style.color = 'var(--success)';
@@ -9749,6 +9763,19 @@ function exportTemplateFromReport() {
 
   const wb = XLSX.utils.book_new();
   const screenedWs = XLSX.utils.aoa_to_sheet(screenedAoa);
+  const recallWs = XLSX.utils.aoa_to_sheet(recallAoa);
+  // Header row colors taken directly from the official template (verified
+  // via its own cell fills): "Screened cases" header is teal (#156082,
+  // the workbook's theme accent1), "Recall" header is green (#008755).
+  // Both white bold text, matching the original exactly.
+  for (let col = 0; col < screenedHeader.length; col++) {
+    const addr = XLSX.utils.encode_cell({ r: 2, c: col });
+    if (screenedWs[addr]) screenedWs[addr].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '156082' } } };
+  }
+  for (let col = 0; col < recallHeader.length; col++) {
+    const addr = XLSX.utils.encode_cell({ r: 2, c: col });
+    if (recallWs[addr]) recallWs[addr].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '008755' } } };
+  }
   // Best-effort highlight (yellow fill) for the flagged rows — some Excel
   // viewers may not render this without the full styling build, but the
   // "ملاحظة" text column above always makes the flagged rows identifiable
@@ -9762,7 +9789,7 @@ function exportTemplateFromReport() {
     }
   });
   XLSX.utils.book_append_sheet(wb, screenedWs, 'Screened cases');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(recallAoa), 'Recall');
+  XLSX.utils.book_append_sheet(wb, recallWs, 'Recall');
   xlsxSave(wb, MOD().ministryFileName);
 
   const posLabel = MOD().isDigitCategory ? t('positiveBiradLabel') : t('positiveResultLabel');
@@ -10280,14 +10307,25 @@ function exportHoldingHealthFile() {
     return;
   }
 
-  const HEADER_FILL = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1E2761' } } };
-  const TITLE_FILL  = { font: { bold: true, sz: 12 } };
+  // Colors taken directly from the official template's own cell fills
+  // (verified via openpyxl cell dump) — NOT invented: title bar #1F4E78
+  // (navy) white bold, column field headers #D9EAF7 (light blue) black
+  // bold, and the summary box's label cells #E7E6E6 (light gray) black
+  // bold.
+  const TITLE_STYLE  = { font: { bold: true, sz: 12, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1F4E78' } } };
+  const FIELD_HEADER_STYLE  = { font: { bold: true }, fill: { fgColor: { rgb: 'D9EAF7' } } };
+  const SUMMARY_LABEL_STYLE = { font: { bold: true }, fill: { fgColor: { rgb: 'E7E6E6' } } };
+  const PLAIN_HEADER_STYLE  = { font: { bold: true } };
 
   function styleRow(ws, rowIdx0, colCount, style) {
     for (let col = 0; col < colCount; col++) {
       const addr = XLSX.utils.encode_cell({ r: rowIdx0, c: col });
       if (ws[addr]) ws[addr].s = style;
     }
+  }
+  function styleCell(ws, addr, style) {
+    if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+    ws[addr].s = style;
   }
   function setFormula(ws, addr, formula, numFmt) {
     ws[addr] = { t: 'n', v: 0, f: formula };
@@ -10296,16 +10334,17 @@ function exportHoldingHealthFile() {
 
   const wb = XLSX.utils.book_new();
 
-  // ---- CRC_2026 ----
+  // ---- CRC_2026 (data columns A-G, summary box label=I / value=J,
+  // exactly like the official template) ----
   const colonRows = colon.rows;
   const crcLast = Math.max(colonRows.length + 5, 6);
   const crcHeader = ['Patient ID','Fit test result (Positive, Negative)','Positive fit Date','Referral Date (Primary to Secondary)','Colonoscopy Date','Hospital','Notes'];
   const crcAoa = [
-    ['Colorectal Cancer Data Collection – 2026', null, null, null, null, null, null, 'CRC Summary'],
-    ['Instructions', null, null, null, null, null, null, 'Total patients / referrals', null],
-    ['Enter one patient per row. Use Patient ID as the unique identifier. Referral-to-colonoscopy days and 28-day status are calculated automatically.', null, null, null, null, null, null, 'Total colonoscopies done', null],
-    ['Any patient who did fit test for colorectal cancer screening', null, null, null, null, null, null, '% colonoscopy within 28 days', null],
-    [...crcHeader, null, 'Average waiting time (days)', null],
+    ['Colorectal Cancer Data Collection – 2026', ...Array(7).fill(null), 'CRC Summary'],
+    ['Instructions', ...Array(7).fill(null), 'Total patients / referrals'],
+    ['Enter one patient per row. Use Patient ID as the unique identifier. Referral-to-colonoscopy days and 28-day status are calculated automatically.', ...Array(7).fill(null), 'Total colonoscopies done'],
+    ['Any patient who did fit test for colorectal cancer screening', ...Array(7).fill(null), '% colonoscopy within 28 days'],
+    [...crcHeader, null, 'Average waiting time (days)'],
     ...colonRows
   ];
   const crcWs = XLSX.utils.aoa_to_sheet(crcAoa);
@@ -10317,20 +10356,23 @@ function exportHoldingHealthFile() {
   setFormula(crcWs, 'J5',
     `IFERROR(SUMPRODUCT((ISNUMBER(D6:D${crcLast}))*(ISNUMBER(E6:E${crcLast}))*(IFERROR(E6:E${crcLast}-D6:D${crcLast},-1)>=0)*IFERROR(E6:E${crcLast}-D6:D${crcLast},0))/SUMPRODUCT((ISNUMBER(D6:D${crcLast}))*(ISNUMBER(E6:E${crcLast}))*(IFERROR(E6:E${crcLast}-D6:D${crcLast},-1)>=0)),0)`,
     '0.0');
-  styleRow(crcWs, 0, 9, TITLE_FILL);
-  styleRow(crcWs, 4, crcHeader.length, HEADER_FILL);
+  styleCell(crcWs, 'A1', TITLE_STYLE);
+  styleCell(crcWs, 'I1', TITLE_STYLE);
+  ['I2','I3','I4','I5'].forEach(a => styleCell(crcWs, a, SUMMARY_LABEL_STYLE));
+  styleRow(crcWs, 4, crcHeader.length, FIELD_HEADER_STYLE);
   crcWs['!cols'] = [16,26,16,22,16,22,30,2,24].map(w => ({ wch: w }));
 
-  // ---- BreastCancer_2026 ----
+  // ---- BreastCancer_2026 (data columns A-F, summary box label=H /
+  // value=I) ----
   const breastRows = breast.rows;
   const bLast = Math.max(breastRows.length + 5, 6);
   const breastHeader = ['Patient ID','Mammogram (Positive, Negative)','Mammogram Date','FNA Date','Hospital','Notes'];
   const breastAoa = [
-    ['Breast Cancer Data Collection – 2026', null, null, null, null, null, 'Breast Cancer Summary'],
-    ['Instructions', null, null, null, null, null, 'Total patients', null],
-    ['Enter one patient per row by Patient ID. Record mammogram and FNA details when completed.', null, null, null, null, null, 'Total mammograms', null],
-    ['Any patient who did mammogram test for breast cancer screening', null, null, null, null, null, 'Total FNA', null],
-    [...breastHeader, 'FNA after mammogram (%)', null],
+    ['Breast Cancer Data Collection – 2026', ...Array(6).fill(null), 'Breast Cancer Summary'],
+    ['Instructions', ...Array(6).fill(null), 'Total patients'],
+    ['Enter one patient per row by Patient ID. Record mammogram and FNA details when completed.', ...Array(6).fill(null), 'Total mammograms'],
+    ['Any patient who did mammogram test for breast cancer screening', ...Array(6).fill(null), 'Total FNA'],
+    [...breastHeader, null, 'FNA after mammogram (%)'],
     ...breastRows
   ];
   const breastWs = XLSX.utils.aoa_to_sheet(breastAoa);
@@ -10338,8 +10380,10 @@ function exportHoldingHealthFile() {
   setFormula(breastWs, 'I3', `COUNTIF(C6:C${bLast},"<>")`);
   setFormula(breastWs, 'I4', `COUNTIF(D6:D${bLast},"<>")`);
   setFormula(breastWs, 'I5', `IFERROR(I4/I3,0)`, '0.0%');
-  styleRow(breastWs, 0, 8, TITLE_FILL);
-  styleRow(breastWs, 4, breastHeader.length, HEADER_FILL);
+  styleCell(breastWs, 'A1', TITLE_STYLE);
+  styleCell(breastWs, 'H1', TITLE_STYLE);
+  ['H2','H3','H4','H5'].forEach(a => styleCell(breastWs, a, SUMMARY_LABEL_STYLE));
+  styleRow(breastWs, 4, breastHeader.length, FIELD_HEADER_STYLE);
   breastWs['!cols'] = [16,26,16,16,22,30,2,22].map(w => ({ wch: w }));
 
   // ---- Case definition (static reference text, verbatim from the
@@ -10358,7 +10402,7 @@ function exportHoldingHealthFile() {
     ['Notes','Free-text field for clinical remarks (e.g., BI-RADS category, lesion size/location, follow-up plan, pathology comments).','Text'],
   ];
   const caseDefWs = XLSX.utils.aoa_to_sheet(caseDefAoa);
-  styleRow(caseDefWs, 0, 3, HEADER_FILL);
+  styleRow(caseDefWs, 0, 3, PLAIN_HEADER_STYLE);
   caseDefWs['!cols'] = [34,70,26].map(w => ({ wch: w }));
 
   // ---- Summary (links the two sheets' own summary boxes — now valid
@@ -10390,7 +10434,7 @@ function exportHoldingHealthFile() {
   setFormula(summaryWs, 'B8', 'BreastCancer_2026!I3');
   setFormula(summaryWs, 'B9', 'BreastCancer_2026!I4');
   setFormula(summaryWs, 'B10', 'BreastCancer_2026!I5', '0.0%');
-  styleRow(summaryWs, 1, 4, HEADER_FILL);
+  styleRow(summaryWs, 1, 4, FIELD_HEADER_STYLE);
   summaryWs['!cols'] = [34,10,50,28].map(w => ({ wch: w }));
 
   // ---- 'Indicator ' (trailing space — matches the official sheet name
@@ -10402,7 +10446,7 @@ function exportHoldingHealthFile() {
     ['FNA procedures','Number of patients who underwent Fine Needle Aspiration (FNA) following abnormal imaging or clinical suspicion','Number of FNA procedures performed','Total number of suspected breast cancer cases requiring diagnostic confirmation','Used to monitor diagnostic pathway performance'],
   ];
   const indicatorWs = XLSX.utils.aoa_to_sheet(indicatorAoa);
-  styleRow(indicatorWs, 0, 5, HEADER_FILL);
+  styleRow(indicatorWs, 0, 5, PLAIN_HEADER_STYLE);
   indicatorWs['!cols'] = [26,50,40,40,40].map(w => ({ wch: w }));
 
   XLSX.utils.book_append_sheet(wb, crcWs, 'CRC_2026');
