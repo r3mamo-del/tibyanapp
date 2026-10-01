@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.14.1</span>
+  <span id="app-version">الإصدار 8.14.2</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -9966,13 +9966,18 @@ function exportQuarterlyMinistryFileInner(statusEl, fmt) {
       noReason = 'No oncologist available.';
       treatmentStartDate = logEntry ? extractTreatmentStartDate(logEntry) : '';
     }
-    // BI-RADS Category: copied EXACTLY from the source (raw), not reworded
-    // into the long descriptive BI-RADS text — per explicit instruction.
-    const biradRawCopy = c.biradRaw || c.category || '';
+    // BI-RADS Category: the full descriptive label ("BI-RADS 4: Suspicious
+    // abnormality"), not the bare source digit (0/1/2...) — a raw digit
+    // with no label is meaningless to anyone reading the exported file,
+    // and the real official template's own BI-RADS Category column holds
+    // this same full text (confirmed directly against the uploaded
+    // template, e.g. "BI-RADS 4: suspicious abnormality" in its own
+    // example row).
+    const biradLabel = biradFullLabel(c.biradRaw, c.category);
     return [
       cleanDate(c), 'Moh', c.num, 'Average', c.age ?? '', 'Woman aged 40-69 years',
       'Hospital', cleanDate(c), cleanDate(c), cleanDate(c),
-      biradRawCopy,
+      biradLabel,
       recallDate, confirmedDiagDate, finalDiagnosis, cancerStage, treatedAtCluster, noReason, treatmentStartDate,
       CLUSTER_CODE, // fixed cluster code for every row — per explicit instruction, do NOT vary this per row
     ];
