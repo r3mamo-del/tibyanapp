@@ -3352,7 +3352,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.13.5</span>
+  <span id="app-version">الإصدار 8.14.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -3563,6 +3563,7 @@ const I18N = {
     noCasesInPeriod: "⚠ No cases within the selected period ({from} to {to})",
     ministryFileCreated: "✓ Created the monthly ministry file ({module}) from {n} hospitals within the period {from} to {to}: ",
     holdingFileCreated: "✓ Created the holding company file ({module}) from {n} hospitals within the period {from} to {to}: ",
+    holdingFileCreatedCombined: "✓ Created the combined holding company file (Breast + Colon): ",
     fileReadConfirmImport: "✓ File read ({n} rows from sheet \"{sheet}\") — now choose the ID Number column, then press Confirm Import",
     fileReadStartScan: "✓ File read ({n} rows from sheet \"{sheet}\") — now choose the ID Number column, then press Start Scan",
     auditFileAlreadyClean: "ℹ {module} audit file is already clean ({n} numbers) — no duplicates or invalid numbers",
@@ -5026,6 +5027,7 @@ const I18N = {
     noCasesInPeriod: "⚠ لا توجد أي حالة ضمن الفترة المحددة ({from} إلى {to})",
     ministryFileCreated: "✓ تم إنشاء ملف الوزارة الشهري ({module}) من {n} مستشفى ضمن الفترة {from} إلى {to}: ",
     holdingFileCreated: "✓ تم إنشاء ملف الصحة القابضة ({module}) من {n} مستشفى ضمن الفترة {from} إلى {to}: ",
+    holdingFileCreatedCombined: "✓ تم إنشاء ملف الصحة القابضة المدمج (الثدي + القولون): ",
     fileReadConfirmImport: "✓ تم قراءة الملف ({n} صف من شيت \"{sheet}\") — الآن اختر عمود ID Number ثم اضغط تأكيد الاستيراد",
     fileReadStartScan: "✓ تم قراءة الملف ({n} صف من شيت \"{sheet}\") — الآن اختر عمود ID Number ثم اضغط بدء الفحص",
     auditFileAlreadyClean: "ℹ ملف تدقيق {module} نظيف بالفعل ({n} رقم) — لا مكرر ولا أرقام غير صحيحة",
@@ -9829,17 +9831,24 @@ function exportQuarterlyMinistryFileInner(statusEl, fmt) {
     statusEl.textContent = t('errUploadOneHospital');
     return;
   }
-  const positiveCases = cases.filter(c => isPositiveCategory(c.category));
-  if (positiveCases.length === 0) {
+  // Per the official template (confirmed against a real, in-use copy):
+  // this quarterly file holds EVERY screened case for the quarter, same
+  // scope as the monthly "Screened cases" sheet — not positive cases
+  // only. positiveCases is still tracked separately below, purely to
+  // decide which rows get the follow-up columns filled in (recall date,
+  // diagnosis, stage, treatment...), since that detail only exists for
+  // cases that were actually flagged BI-RADS 4/5 and logged.
+  if (cases.length === 0) {
     statusEl.style.color = 'var(--danger)';
-    statusEl.textContent = t('noPositiveCasesInPeriod');
+    statusEl.textContent = t('noCasesInPeriod').replace('{from}', fmt(range.from)).replace('{to}', fmt(range.to));
     return;
   }
+  const positiveCases = cases.filter(c => isPositiveCategory(c.category));
 
-  const header = ['Date of visit','Sector','ID Number  ','Risk group (Average/High)','Age',
+  const header = ['Date of visit','Sector','National ID','Risk group (Average/High)','Age',
     'Risk factor','Place of screening','Referral date from PHC','Date of mammography screening',
-    'Date of mammography result','BIRAD Category','Recall date','Date of confirmed final diagnosis',
-    'Final diagnosis','Cancer stage','Treated at the Cluster? ','If "No",what is the reason ',
+    'Date of mammography result','BI-RADS Category','Recall date','Date of confirmed final diagnosis',
+    'Final diagnosis','Cancer stage','Treated at the Cluster?','If "No" what is the reason',
     'Date of Starting Treatment','Cluster'];
 
   const estimateSuffixRe = / \([^)]*\)$/;
@@ -9886,34 +9895,43 @@ function exportQuarterlyMinistryFileInner(statusEl, fmt) {
     return m ? m[1] : '';
   }
 
-  const dataRows = positiveCases.map((c, idx) => {
-    const logEntry = logByNum.get(c.num);
-    const postBiopsyStr = logEntry && logEntry.postBiopsyAppointment ? formatDateForExport(new Date(logEntry.postBiopsyAppointment)) : '';
-    // Per explicit instruction: in the QUARTERLY file specifically,
-    // Recall date must be the SAME value as "Date of confirmed final
-    // diagnosis" — both come from the post-biopsy follow-up appointment
-    // ONLY. No more falling back to biopsyDate or a status string
-    // (that was putting free text like "refuse"/"waiting list" into a
-    // date column instead of an actual date).
-    const recallDate = postBiopsyStr;
-    // "Date of confirmed final diagnosis" pulls from the post-biopsy
-    // follow-up appointment date — per explicit instruction.
-    const confirmedDiagDate = postBiopsyStr;
-    // "Final diagnosis" pulls from the management plan (treatmentPlan)
-    // field — per explicit instruction, NOT the finalDiagnosis field.
-    const finalDiagnosis = logEntry ? (logEntry.treatmentPlan || '') : '';
-    // Cancer stage isn't tracked as its own field for most cases yet —
-    // falls back to the BI-RADS category itself so the column isn't
-    // left blank when a real stage hasn't been recorded.
-    const cancerStage = (logEntry && logEntry.cancerStage) ? logEntry.cancerStage : biradFullLabel(c.biradRaw, c.category);
-    const treatedAtCluster = logEntry ? inferTreatedAtCluster(logEntry) : '';
-    // Per explicit instruction: EVERY row gets this same fixed answer
-    // (matching the reference file's own convention) — not conditional
-    // on whether "Treated at the Cluster?" could be determined, since
-    // that was leaving most rows blank.
-    const noReason = 'No oncologist available.';
-    const treatmentStartDate = logEntry ? extractTreatmentStartDate(logEntry) : '';
-    // BIRAD Category: copied EXACTLY from the source (raw), not reworded
+  const dataRows = cases.map((c, idx) => {
+    // Follow-up detail (recall date, diagnosis, stage, treatment...) only
+    // ever applies to a case that was actually flagged positive and has
+    // moved into the positive-cases log — every other row (the large
+    // majority: negative/benign results) leaves these columns blank,
+    // exactly like the official template's own real-world data.
+    let recallDate = '', confirmedDiagDate = '', finalDiagnosis = '', cancerStage = '',
+        treatedAtCluster = '', noReason = '', treatmentStartDate = '';
+    if (isPositiveCategory(c.category)) {
+      const logEntry = logByNum.get(c.num);
+      const postBiopsyStr = logEntry && logEntry.postBiopsyAppointment ? formatDateForExport(new Date(logEntry.postBiopsyAppointment)) : '';
+      // Per explicit instruction: in the QUARTERLY file specifically,
+      // Recall date must be the SAME value as "Date of confirmed final
+      // diagnosis" — both come from the post-biopsy follow-up appointment
+      // ONLY. No more falling back to biopsyDate or a status string
+      // (that was putting free text like "refuse"/"waiting list" into a
+      // date column instead of an actual date).
+      recallDate = postBiopsyStr;
+      // "Date of confirmed final diagnosis" pulls from the post-biopsy
+      // follow-up appointment date — per explicit instruction.
+      confirmedDiagDate = postBiopsyStr;
+      // "Final diagnosis" pulls from the management plan (treatmentPlan)
+      // field — per explicit instruction, NOT the finalDiagnosis field.
+      finalDiagnosis = logEntry ? (logEntry.treatmentPlan || '') : '';
+      // Cancer stage isn't tracked as its own field for most cases yet —
+      // falls back to the BI-RADS category itself so the column isn't
+      // left blank when a real stage hasn't been recorded.
+      cancerStage = (logEntry && logEntry.cancerStage) ? logEntry.cancerStage : biradFullLabel(c.biradRaw, c.category);
+      treatedAtCluster = logEntry ? inferTreatedAtCluster(logEntry) : '';
+      // Per explicit instruction: EVERY positive row gets this same fixed
+      // answer (matching the reference file's own convention) — not
+      // conditional on whether "Treated at the Cluster?" could be
+      // determined, since that was leaving most rows blank.
+      noReason = 'No oncologist available.';
+      treatmentStartDate = logEntry ? extractTreatmentStartDate(logEntry) : '';
+    }
+    // BI-RADS Category: copied EXACTLY from the source (raw), not reworded
     // into the long descriptive BI-RADS text — per explicit instruction.
     const biradRawCopy = c.biradRaw || c.category || '';
     return [
@@ -9972,7 +9990,7 @@ function exportQuarterlyMinistryFileInner(statusEl, fmt) {
 
   statusEl.style.color = 'var(--success)';
   const matchedCount = positiveCases.filter(c => logByNum.has(c.num)).length;
-  statusEl.textContent = t('quarterlyFileCreated').replace('{n}', positiveCases.length).replace('{from}', fmt(range.from)).replace('{to}', fmt(range.to))
+  statusEl.textContent = t('quarterlyFileCreated').replace('{n}', dataRows.length).replace('{from}', fmt(range.from)).replace('{to}', fmt(range.to))
     + ' ' + t('quarterlyFollowUpMatched').replace('{matched}', matchedCount).replace('{total}', positiveCases.length);
 }
 
@@ -10026,12 +10044,12 @@ function exportQuarterlyColonFileInner(statusEl, fmt) {
     statusEl.textContent = t('errUploadOneHospital');
     return;
   }
-  const positiveCases = cases.filter(c => isPositiveCategory(c.category));
-  if (positiveCases.length === 0) {
+  if (cases.length === 0) {
     statusEl.style.color = 'var(--danger)';
-    statusEl.textContent = t('noPositiveCasesInPeriod');
+    statusEl.textContent = t('noCasesInPeriod');
     return;
   }
+  const positiveCases = cases.filter(c => isPositiveCategory(c.category));
 
   const header = ['Date of Visit','Sector','PHC/Hospital','National ID','Gender',
     'Risk Group (Average/High)','Age','Select the risk factor','Screening tool',
@@ -10086,21 +10104,26 @@ function exportQuarterlyColonFileInner(statusEl, fmt) {
     return '';
   }
 
-  const dataRows = positiveCases.map(c => {
-    const logEntry = logByNum.get(c.num);
-    const endoscopyDone = logEntry ? yesNo(logEntry.consentForExam || logEntry.biopsyDone) : '';
-    const endoscopyNoReason = (endoscopyDone === 'No' && logEntry) ? (logEntry.rejectionReason || '') : '';
-    const endoscopyDate = logEntry && logEntry.biopsyDate ? formatDateForExport(new Date(logEntry.biopsyDate)) : '';
-    const endoscopyResult = logEntry ? (logEntry.endoscopyResult || '') : '';
-    const biopsyTaken = logEntry ? yesNo(logEntry.biopsyTaken) : '';
-    const biopsyResult = logEntry ? mapBiopsyResult(logEntry.finalDiagnosis) : '';
-    const cancerStage = logEntry ? (logEntry.cancerStage || '') : '';
-    const treatedAtCluster = logEntry ? inferTreatedAtCluster(logEntry) : '';
-    const treatedNoReason = (treatedAtCluster === 'No' && logEntry) ? (logEntry.notes || '') : '';
-    const treatmentStartDate = logEntry ? extractTreatmentStartDate(logEntry) : '';
+  const dataRows = cases.map(c => {
+    let endoscopyDone = '', endoscopyNoReason = '', endoscopyDate = '', endoscopyResult = '',
+      biopsyTaken = '', biopsyResult = '', cancerStage = '', treatedAtCluster = '',
+      treatedNoReason = '', treatmentStartDate = '';
+    if (isPositiveCategory(c.category)) {
+      const logEntry = logByNum.get(c.num);
+      endoscopyDone = logEntry ? yesNo(logEntry.consentForExam || logEntry.biopsyDone) : '';
+      endoscopyNoReason = (endoscopyDone === 'No' && logEntry) ? (logEntry.rejectionReason || '') : '';
+      endoscopyDate = logEntry && logEntry.biopsyDate ? formatDateForExport(new Date(logEntry.biopsyDate)) : '';
+      endoscopyResult = logEntry ? (logEntry.endoscopyResult || '') : '';
+      biopsyTaken = logEntry ? yesNo(logEntry.biopsyTaken) : '';
+      biopsyResult = logEntry ? mapBiopsyResult(logEntry.finalDiagnosis) : '';
+      cancerStage = logEntry ? (logEntry.cancerStage || '') : '';
+      treatedAtCluster = logEntry ? inferTreatedAtCluster(logEntry) : '';
+      treatedNoReason = (treatedAtCluster === 'No' && logEntry) ? (logEntry.notes || '') : '';
+      treatmentStartDate = logEntry ? extractTreatmentStartDate(logEntry) : '';
+    }
     return [
       cleanDate(c), 'Moh', 'Hospital', c.num, normalizeGender(c.gender), 'Average Risk', c.age ?? '', 'Aged 45-75 years',
-      'Fecal immunochemical test (FIT)', cleanDate(c), cleanDate(c), cleanDate(c), 'Positive', cleanDate(c),
+      'Fecal immunochemical test (FIT)', cleanDate(c), cleanDate(c), cleanDate(c), biradFullLabel(c.biradRaw, c.category), cleanDate(c),
       endoscopyDone, endoscopyNoReason, endoscopyDate, endoscopyResult, biopsyTaken, biopsyResult,
       cancerStage, treatedAtCluster, treatedNoReason, treatmentStartDate, CLUSTER_CODE,
     ];
@@ -10149,102 +10172,260 @@ function exportQuarterlyColonFileInner(statusEl, fmt) {
 
   statusEl.style.color = 'var(--success)';
   const matchedCount = positiveCases.filter(c => logByNum.has(c.num)).length;
-  statusEl.textContent = t('quarterlyFileCreated').replace('{n}', positiveCases.length).replace('{from}', fmt(range.from)).replace('{to}', fmt(range.to))
+  statusEl.textContent = t('quarterlyFileCreated').replace('{n}', dataRows.length).replace('{from}', fmt(range.from)).replace('{to}', fmt(range.to))
     + ' ' + t('quarterlyFollowUpMatched').replace('{matched}', matchedCount).replace('{total}', positiveCases.length);
 }
 
-// Holding Health Company file (الصحة القابضة) — Breast Cancer only, matching
-// the official "BreastCancer_2026" template (single sheet, summary block,
-// Patient ID / Mammogram result / Mammogram Date / FNA Date / Hospital /
-// Notes). Positive cases (BI-RADS 4-5) are moved to the END of the sheet,
-// grouped together in sequence, instead of being scattered among the rest.
+// Holding Health Company file (الصحة القابضة) — rebuilt to match the REAL
+// official template exactly: ONE combined workbook with five sheets —
+// 'CRC_2026' (colon), 'BreastCancer_2026' (breast), 'Case definition',
+// 'Summary' and 'Indicator ' (note the trailing space — the official file
+// has it) — pulling BOTH modules' case data in the SAME run, regardless of
+// which module tab is active in the UI, instead of the old one-module-at-a-
+// time single-sheet file. Confirmed by direct inspection of the official
+// "Cancer_data_collection_2026__Q2.xlsx" template (openpyxl cell dump):
+// exact headers, exact summary-box layout (I/J for CRC, H/I for breast),
+// and the exact 'Case definition'/'Summary'/'Indicator ' sheets' static
+// text, reproduced verbatim below. The official file's own J4/J5/I3/I4/I5
+// summary formulas pointed at #REF! (broken external references) — these
+// are rebuilt here as real, working formulas against each sheet's own data
+// range, using the same IFERROR-wrapped-per-element technique verified
+// earlier against this exact workbook (a raw date subtraction on a range
+// that contains ANY non-date cell poisons the entire SUMPRODUCT array even
+// when later multiplied by a zero/false mask, so each subtraction must be
+// wrapped in its own IFERROR before use in a comparison) plus the >=0
+// filter that excludes impossible negative day-gaps (colonoscopy dated
+// before its own referral — a data-entry error, not a real case) from
+// both the percentage and the average.
+function collectHoldingModuleRows(moduleKey) {
+  const savedModule = currentModule;
+  const savedReportState = reportState;
+  const savedReportHospitals = REPORT_HOSPITALS;
+  currentModule = moduleKey;
+  reportState = reportStateStore[moduleKey];
+  REPORT_HOSPITALS = moduleKey === 'colon' ? REPORT_HOSPITALS_COLON : REPORT_HOSPITALS_BREAST;
+  try {
+    let res;
+    try { res = collectReportScanRows(); } catch (e) { res = { error: 'exception' }; }
+    if (res.error || res.hospitalsUsed === 0) return { res, rows: [] };
+
+    const estimateSuffixRe = / \([^)]*\)$/;
+    const cleanDate = c => (c.dateStr || '').replace(estimateSuffixRe, '');
+    const noteFor = c => c.excludeReason === 'age' ? t('noteAgeOutside')
+      : c.excludeReason === 'noResult' ? t('noteWaitingResult')
+      : estimateSuffixRe.test(c.dateStr || '') ? t('estimatedFromNearestParen2') : '';
+
+    // Follow-up detail (biopsy/FNA/colonoscopy dates) lives only in the
+    // positive-cases log, matched here by ID number — same approach as
+    // the Ministry quarterly exports.
+    const logMap = new Map();
+    positiveLog.filter(e => e.module === moduleKey).forEach(e => { if (e.num && !logMap.has(e.num)) logMap.set(e.num, e); });
+
+    const rows = res.cases.map(c => {
+      const isPos = isPositiveCategory(c.category);
+      const logEntry = logMap.get(c.num);
+      const hospitalName = HOSPITAL_EN_NAMES[c.hospital] || c.hospital;
+      if (moduleKey === 'breast') {
+        // Mammogram Date is the actual screening date for every case
+        // (regardless of result) — matching how the other official
+        // exports reuse the single tracked scan date across every "date
+        // of X" column the template asks for. FNA only ever follows a
+        // positive/suspicious reading, so it's filled only then.
+        const fnaDate = (isPos && logEntry && logEntry.biopsyDate) ? formatDateForExport(new Date(logEntry.biopsyDate)) : '';
+        return [c.num, biradFullLabel(c.biradRaw, c.category), cleanDate(c), fnaDate, hospitalName, noteFor(c)];
+      }
+      // Colon: referral to secondary care only happens after a positive
+      // FIT result, so "Referral Date" is blank for negative cases;
+      // colonoscopy date comes from the follow-up log the same way the
+      // quarterly export's "Endoscopy date" column does.
+      const referralDate = isPos ? cleanDate(c) : '';
+      const colonoscopyDate = (isPos && logEntry && logEntry.biopsyDate) ? formatDateForExport(new Date(logEntry.biopsyDate)) : '';
+      return [c.num, biradFullLabel(c.biradRaw, c.category), cleanDate(c), referralDate, colonoscopyDate, hospitalName, noteFor(c)];
+    });
+    return { res, rows };
+  } finally {
+    currentModule = savedModule;
+    reportState = savedReportState;
+    REPORT_HOSPITALS = savedReportHospitals;
+  }
+}
+
 function exportHoldingHealthFile() {
   const statusEl = document.getElementById('hhc-export-status');
   // Fixed English government template — must not use the language-aware
   // formatter (embeds RTL marks in Arabic mode, corrupting the date text).
   const fmt = d => formatDateForExport(d);
-  const res = collectReportScanRows();
 
-  if (res.error) {
+  const breast = collectHoldingModuleRows('breast');
+  const colon  = collectHoldingModuleRows('colon');
+
+  if (breast.res.error && colon.res.error) {
     statusEl.style.color = 'var(--danger)';
     statusEl.textContent = t('errPickReportPeriod');
     return;
   }
-  const { range, hospitalsUsed, duplicatesRemoved, auditDuplicatesRemoved, outOfPeriod, badDate, dateAmbiguousCount, cases } = res;
-
-  if (hospitalsUsed === 0) {
+  const breastHospitals = !breast.res.error ? (breast.res.hospitalsUsed || 0) : 0;
+  const colonHospitals  = !colon.res.error  ? (colon.res.hospitalsUsed  || 0) : 0;
+  if (breastHospitals === 0 && colonHospitals === 0) {
     statusEl.style.color = 'var(--danger)';
     statusEl.textContent = t('errUploadOneHospital');
     return;
   }
-  if (cases.length === 0) {
+  if (breast.rows.length === 0 && colon.rows.length === 0) {
     statusEl.style.color = 'var(--danger)';
-    statusEl.textContent = t('noCasesInPeriod').replace('{from}', fmt(range.from)).replace('{to}', fmt(range.to));
+    const anyRange = (!breast.res.error && breast.res.range) || (!colon.res.error && colon.res.range);
+    statusEl.textContent = anyRange
+      ? t('noCasesInPeriod').replace('{from}', fmt(anyRange.from)).replace('{to}', fmt(anyRange.to))
+      : t('errPickReportPeriod');
     return;
   }
 
-  // Age-excluded and no-result cases used to be added here too, flagged
-  // via the Notes column — now excluded entirely per explicit request.
-  const flaggedCases = [...cases];
-  // Negative/other cases first (original order), positive cases grouped
-  // together at the very end, in sequence.
-  const negative = flaggedCases.filter(c => !(isPositiveCategory(c.category)));
-  const positive = flaggedCases.filter(c =>  (isPositiveCategory(c.category)));
-  const ordered = [...negative, ...positive];
+  const HEADER_FILL = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1E2761' } } };
+  const TITLE_FILL  = { font: { bold: true, sz: 12 } };
 
-  const estimateSuffixRe = / \([^)]*\)$/;
-  const noteFor = c => c.excludeReason === 'age' ? t('noteAgeOutside')
-    : c.excludeReason === 'noResult' ? t('noteWaitingResult')
-    : estimateSuffixRe.test(c.dateStr || '') ? t('estimatedFromNearestParen2') : '';
-  const cleanDate = c => (c.dateStr || '').replace(estimateSuffixRe, '');
-  const dataRows = ordered.map(c => ([
-    c.num, biradFullLabel(c.biradRaw, c.category), cleanDate(c), '', (HOSPITAL_EN_NAMES[c.hospital] || c.hospital), noteFor(c)
-  ]));
-
-  const m = MOD();
-  const header = ['Patient ID', m.holdingResultHeader, m.holdingDateHeader, m.holdingSecondDateHeader, 'Hospital', 'Notes'];
-  const totalDone = ordered.filter(c => c.dateStr).length;
-  const line2 = m.key === 'breast'
-    ? 'Enter one patient per row by Patient ID. Record mammogram and FNA details when completed.'
-    : 'Enter one patient per row by Patient ID. Record FIT test and colonoscopy details when completed.';
-  const line3 = m.key === 'breast'
-    ? 'Any patient who did mammogram test for breast cancer screening'
-    : 'Any patient who did fit test for colorectal cancer screening';
-  const metric2Label = m.key === 'breast' ? 'Total mammograms' : 'Total colonoscopies done';
-  const metric3Label = m.key === 'breast' ? 'Total FNA' : '% colonoscopy within 28 days';
-
-  const aoa = [
-    [m.holdingTitle, null, null, null, null, null, null, m.holdingSummaryTitle],
-    ['Instructions', null, null, null, null, null, null, 'Total patients', ordered.length],
-    [line2, null, null, null, null, null, null, metric2Label, totalDone],
-    [line3, null, null, null, null, null, null, metric3Label, 0],
-    [...header, null, (m.key === 'breast' ? 'FNA after mammogram (%)' : 'Average waiting time (days)'), 0],
-    ...dataRows
-  ];
+  function styleRow(ws, rowIdx0, colCount, style) {
+    for (let col = 0; col < colCount; col++) {
+      const addr = XLSX.utils.encode_cell({ r: rowIdx0, c: col });
+      if (ws[addr]) ws[addr].s = style;
+    }
+  }
+  function setFormula(ws, addr, formula, numFmt) {
+    ws[addr] = { t: 'n', v: 0, f: formula };
+    if (numFmt) ws[addr].z = numFmt;
+  }
 
   const wb = XLSX.utils.book_new();
-  const hhcWs = XLSX.utils.aoa_to_sheet(aoa);
-  const HHC_HEADER_ROWS = 5; // matches the fixed 5-row header block above before dataRows starts
-  ordered.forEach((c, i) => {
-    if (!noteFor(c)) return;
-    const excelRow = i + HHC_HEADER_ROWS;
-    for (let col = 0; col < header.length; col++) {
-      const addr = XLSX.utils.encode_cell({ r: excelRow, c: col });
-      if (hhcWs[addr]) hhcWs[addr].s = { fill: { fgColor: { rgb: 'FFF9C4' } } };
-    }
-  });
-  XLSX.utils.book_append_sheet(wb, hhcWs, m.holdingSheetName);
-  xlsxSave(wb, m.holdingFileName);
 
+  // ---- CRC_2026 ----
+  const colonRows = colon.rows;
+  const crcLast = Math.max(colonRows.length + 5, 6);
+  const crcHeader = ['Patient ID','Fit test result (Positive, Negative)','Positive fit Date','Referral Date (Primary to Secondary)','Colonoscopy Date','Hospital','Notes'];
+  const crcAoa = [
+    ['Colorectal Cancer Data Collection – 2026', null, null, null, null, null, null, 'CRC Summary'],
+    ['Instructions', null, null, null, null, null, null, 'Total patients / referrals', null],
+    ['Enter one patient per row. Use Patient ID as the unique identifier. Referral-to-colonoscopy days and 28-day status are calculated automatically.', null, null, null, null, null, null, 'Total colonoscopies done', null],
+    ['Any patient who did fit test for colorectal cancer screening', null, null, null, null, null, null, '% colonoscopy within 28 days', null],
+    [...crcHeader, null, 'Average waiting time (days)', null],
+    ...colonRows
+  ];
+  const crcWs = XLSX.utils.aoa_to_sheet(crcAoa);
+  setFormula(crcWs, 'J2', `COUNTA(A6:A${crcLast})`);
+  setFormula(crcWs, 'J3', `COUNTIF(E6:E${crcLast},"<>")`);
+  setFormula(crcWs, 'J4',
+    `IFERROR(SUMPRODUCT((ISNUMBER(D6:D${crcLast}))*(ISNUMBER(E6:E${crcLast}))*(IFERROR(E6:E${crcLast}-D6:D${crcLast},-1)>=0)*(IFERROR(E6:E${crcLast}-D6:D${crcLast},999)<=28))/SUMPRODUCT((ISNUMBER(D6:D${crcLast}))*(ISNUMBER(E6:E${crcLast}))*(IFERROR(E6:E${crcLast}-D6:D${crcLast},-1)>=0)),0)`,
+    '0.0%');
+  setFormula(crcWs, 'J5',
+    `IFERROR(SUMPRODUCT((ISNUMBER(D6:D${crcLast}))*(ISNUMBER(E6:E${crcLast}))*(IFERROR(E6:E${crcLast}-D6:D${crcLast},-1)>=0)*IFERROR(E6:E${crcLast}-D6:D${crcLast},0))/SUMPRODUCT((ISNUMBER(D6:D${crcLast}))*(ISNUMBER(E6:E${crcLast}))*(IFERROR(E6:E${crcLast}-D6:D${crcLast},-1)>=0)),0)`,
+    '0.0');
+  styleRow(crcWs, 0, 9, TITLE_FILL);
+  styleRow(crcWs, 4, crcHeader.length, HEADER_FILL);
+  crcWs['!cols'] = [16,26,16,22,16,22,30,2,24].map(w => ({ wch: w }));
+
+  // ---- BreastCancer_2026 ----
+  const breastRows = breast.rows;
+  const bLast = Math.max(breastRows.length + 5, 6);
+  const breastHeader = ['Patient ID','Mammogram (Positive, Negative)','Mammogram Date','FNA Date','Hospital','Notes'];
+  const breastAoa = [
+    ['Breast Cancer Data Collection – 2026', null, null, null, null, null, 'Breast Cancer Summary'],
+    ['Instructions', null, null, null, null, null, 'Total patients', null],
+    ['Enter one patient per row by Patient ID. Record mammogram and FNA details when completed.', null, null, null, null, null, 'Total mammograms', null],
+    ['Any patient who did mammogram test for breast cancer screening', null, null, null, null, null, 'Total FNA', null],
+    [...breastHeader, 'FNA after mammogram (%)', null],
+    ...breastRows
+  ];
+  const breastWs = XLSX.utils.aoa_to_sheet(breastAoa);
+  setFormula(breastWs, 'I2', `COUNTA(A6:A${bLast})`);
+  setFormula(breastWs, 'I3', `COUNTIF(C6:C${bLast},"<>")`);
+  setFormula(breastWs, 'I4', `COUNTIF(D6:D${bLast},"<>")`);
+  setFormula(breastWs, 'I5', `IFERROR(I4/I3,0)`, '0.0%');
+  styleRow(breastWs, 0, 8, TITLE_FILL);
+  styleRow(breastWs, 4, breastHeader.length, HEADER_FILL);
+  breastWs['!cols'] = [16,26,16,16,22,30,2,22].map(w => ({ wch: w }));
+
+  // ---- Case definition (static reference text, verbatim from the
+  // official template) ----
+  const caseDefAoa = [
+    ['Variable Name','Definition','Data Type'],
+    ['Patient ID','Unique identifier assigned to each patient record','Text / Numeric'],
+    ['FIT Test Result','Result of the Fecal Immunochemical Test (FIT) used for colorectal cancer screening','Categorical'],
+    ['Positive FIT Date','Date when the patient received a positive FIT result','Date'],
+    ['Referral Date (Primary to Secondary)','Date when the patient was referred from Primary Health Care (PHC) to secondary care for further evaluation','Date'],
+    ['Colonoscopy Date','Date when colonoscopy procedure was performed','Date'],
+    ['Mammogram Result','Radiologic screening outcome, categorized as Positive (suspicious finding — mass, calcification, or architectural distortion, e.g., BI-RADS 4–5) or Negative (no suspicious finding, e.g., BI-RADS 1–2).','Categorical (Positive  , Negative ) or by BI-RADS'],
+    ['Mammogram Date','Date the mammogram was performed.','Text'],
+    ['FNA Date','Date the Fine Needle Aspiration (cytology) was performed, if done — typically as follow-up to a positive/suspicious mammogram.','Text'],
+    ['Hospital','Facility where the patient was screened/treated.','Text'],
+    ['Notes','Free-text field for clinical remarks (e.g., BI-RADS category, lesion size/location, follow-up plan, pathology comments).','Text'],
+  ];
+  const caseDefWs = XLSX.utils.aoa_to_sheet(caseDefAoa);
+  styleRow(caseDefWs, 0, 3, HEADER_FILL);
+  caseDefWs['!cols'] = [34,70,26].map(w => ({ wch: w }));
+
+  // ---- Summary (links the two sheets' own summary boxes — now valid
+  // real references instead of the official file's broken #REF! ones) ----
+  const summaryAoa = [
+    [],
+    ['Indicator','Value','Definition','Owner / Source'],
+    ['CRC – Total referrals', null, 'Number of unique patient rows entered in CRC sheet', 'Primary to Secondary referrals'],
+    ['CRC – Total colonoscopies', null, 'Patients with colonoscopy date entered', 'Secondary care / endoscopy'],
+    ['CRC – Within 28 days (%)', null, 'Colonoscopy completed within 28 days from referral', 'Calculated'],
+    ['CRC – Avg waiting time (days)', null, 'Average days between referral and colonoscopy', 'Calculated'],
+    ['Breast – Total patients', null, 'Number of unique patient rows entered in breast sheet', 'PHC referrals / tracking'],
+    ['Breast – Total mammograms', null, 'Patients with mammogram completed', 'Radiology'],
+    ['Breast – Total FNA', null, 'Patients with FNA completed', 'Pathology / breast clinic'],
+    ['Breast – FNA after mammogram (%)', null, 'Share of mammogram patients who had FNA', 'Calculated'],
+    [],
+    ['Recommended patient-level fields'],
+    ['Use one row per patient ID in each sheet.'],
+    ['Date fields should be entered as dates to enable calculations.'],
+    ['You may add MRN, cluster, or facility code if needed.'],
+    ['This template is for 2025 tracking and can be extended by month or quarter.'],
+  ];
+  const summaryWs = XLSX.utils.aoa_to_sheet(summaryAoa);
+  setFormula(summaryWs, 'B3', 'CRC_2026!J2');
+  setFormula(summaryWs, 'B4', 'CRC_2026!J3');
+  setFormula(summaryWs, 'B5', 'CRC_2026!J4', '0.0%');
+  setFormula(summaryWs, 'B6', 'CRC_2026!J5', '0.0');
+  setFormula(summaryWs, 'B7', 'BreastCancer_2026!I2');
+  setFormula(summaryWs, 'B8', 'BreastCancer_2026!I3');
+  setFormula(summaryWs, 'B9', 'BreastCancer_2026!I4');
+  setFormula(summaryWs, 'B10', 'BreastCancer_2026!I5', '0.0%');
+  styleRow(summaryWs, 1, 4, HEADER_FILL);
+  summaryWs['!cols'] = [34,10,50,28].map(w => ({ wch: w }));
+
+  // ---- 'Indicator ' (trailing space — matches the official sheet name
+  // exactly) — static methodology reference text ----
+  const indicatorAoa = [
+    ['Indicator','Definition','Numerator','Denominator','Notes'],
+    ['Colonoscopy within 28 days','Patients referred from Primary Care who completed colonoscopy within 28 days of referral','Number of patients who completed colonoscopy ≤28 days from referral','Total number of referred patients from PHC to secondary care for suspected colorectal cancer','Used to monitor access and timeliness of diagnostic services'],
+    ['Mammogram screening','Number of women who completed a mammogram screening during the reporting period','Number of women who completed mammography','Total eligible women referred or screened for breast cancer','Used for breast cancer screening coverage monitoring'],
+    ['FNA procedures','Number of patients who underwent Fine Needle Aspiration (FNA) following abnormal imaging or clinical suspicion','Number of FNA procedures performed','Total number of suspected breast cancer cases requiring diagnostic confirmation','Used to monitor diagnostic pathway performance'],
+  ];
+  const indicatorWs = XLSX.utils.aoa_to_sheet(indicatorAoa);
+  styleRow(indicatorWs, 0, 5, HEADER_FILL);
+  indicatorWs['!cols'] = [26,50,40,40,40].map(w => ({ wch: w }));
+
+  XLSX.utils.book_append_sheet(wb, crcWs, 'CRC_2026');
+  XLSX.utils.book_append_sheet(wb, breastWs, 'BreastCancer_2026');
+  XLSX.utils.book_append_sheet(wb, caseDefWs, 'Case definition');
+  XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+  XLSX.utils.book_append_sheet(wb, indicatorWs, 'Indicator ');
+  xlsxSave(wb, 'Holding-Health-File_Cancer-Data-Collection.xlsx');
+
+  function summarizeModule(label, m, hospitalsUsed) {
+    if (m.res.error || hospitalsUsed === 0) return `${label}: ${t('errUploadOneHospital')}`;
+    const r = m.res;
+    return t('holdingFileCreated').replace('{module}', label).replace('{n}', hospitalsUsed).replace('{from}', fmt(r.range.from)).replace('{to}', fmt(r.range.to))
+      + t('duplicatesRemovedAuto').replace('{n}', r.duplicatesRemoved)
+      + (r.auditDuplicatesRemoved > 0 ? t('excludedAlreadyInAudit').replace('{n}', r.auditDuplicatesRemoved) : '')
+      + (r.outOfPeriod > 0 ? t('rowsOutOfPeriod').replace('{n}', r.outOfPeriod) : '')
+      + (r.badDate > 0 ? t('rowsUnreadableDate').replace('{n}', r.badDate) : '')
+      + (r.dateAmbiguousCount > 0 ? t('rowsDateAmbiguous').replace('{n}', r.dateAmbiguousCount) : '');
+  }
   statusEl.style.color = 'var(--success)';
-  const posLabel2 = m.isDigitCategory ? t('positiveBiradLabel') : t('positiveResultLabel');
-  statusEl.textContent = t('holdingFileCreated').replace('{module}', m.label).replace('{n}', hospitalsUsed).replace('{from}', fmt(range.from)).replace('{to}', fmt(range.to))
-    + t('orderedPositiveSummary').replace('{n1}', ordered.length).replace('{n2}', positive.length).replace('{label}', posLabel2)
-    + t('duplicatesRemovedAuto').replace('{n}', duplicatesRemoved)
-    + (auditDuplicatesRemoved > 0 ? t('excludedAlreadyInAudit').replace('{n}', auditDuplicatesRemoved) : '')
-    + (outOfPeriod > 0 ? t('rowsOutOfPeriod').replace('{n}', outOfPeriod) : '')
-    + (badDate > 0 ? t('rowsUnreadableDate').replace('{n}', badDate) : '')
-    + (dateAmbiguousCount > 0 ? t('rowsDateAmbiguous').replace('{n}', dateAmbiguousCount) : '') + '.';
+  statusEl.textContent = t('holdingFileCreatedCombined')
+    + summarizeModule(MODULES.breast.label, breast, breastHospitals) + ' — '
+    + summarizeModule(MODULES.colon.label, colon, colonHospitals);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -10862,7 +11043,15 @@ function parseCellDate(v, preferMonthFirst) {
       // fall in this range, so this check is safe and never misfires on
       // legitimate dates. Converts to an approximate Gregorian year.
       if (isLikelyHijriYear(y)) y = hijriYearToApproxGregorian(y);
-    } else if (parts[2].length === 2) {    // ??/??/yy → 20yy
+    } else if (parts[2].length === 1 || parts[2].length === 2) {    // ??/??/yy or ??/??/y → 20yy
+      // NOTE: a genuine 2-digit-year-at-the-end date always writes the
+      // year with 2 digits (never just 1) — so parts[2].length === 1 can
+      // only ever be a single-digit DAY in a year-first (yy/m/d) file,
+      // never a real "d/m/yy" date. Widened from length === 2 only,
+      // which previously missed exactly that case (e.g. "25/11/2" for
+      // 2025-11-02) and sent it to badDate as unreadable, even though
+      // the very same file's double-digit-day rows ("25/10/30") already
+      // parsed correctly via the fallback below.
       y = 2000 + (+parts[2]);
       const a = +parts[0], b = +parts[1];
       if (a > 12)      { d = a; m = b; }
