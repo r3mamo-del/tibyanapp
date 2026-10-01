@@ -19,7 +19,15 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- xlsx-js-style: a drop-in, API-compatible fork of SheetJS (same
+     XLSX.utils.*, same XLSX.writeFile) built on the same core version
+     (0.18.5) — the ONLY difference is that it actually serializes cell
+     `.s` style objects (fills/fonts) into the written .xlsx file. The
+     plain SheetJS Community Edition build silently DROPS every `.s`
+     style on write — that's the real reason the export header colors
+     never appeared in the output file, even though the code setting
+     them was otherwise correct. -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://apis.google.com/js/api.js"></script>
 <script src="https://accounts.google.com/gsi/client"></script>
 <style>
@@ -3352,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.14.0</span>
+  <span id="app-version">الإصدار 8.14.1</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
