@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.14.2</span>
+  <span id="app-version">الإصدار 8.15.1</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -4028,6 +4028,7 @@ const I18N = {
     positiveWord: "Positive",
     b0CasesLbl: "B0 Cases",
     noDateColWarning: "No date column — the whole file was counted without period filtering",
+    dateColIsTimestampWarning: "The date column in use is the form-submission timestamp ('{col}'), not an actual exam date — if any old/duplicate rows were entered or edited today, they may be miscounted into this period. Check whether the file has a real exam-date column.",
     noIdColWarning: "A file was uploaded but the ID Number column was not selected",
     positiveCasesBirad45: "Positive Cases (BI-RADS 4 and 5)",
     positiveCasesTestResult: "Positive Cases (Test Result)",
@@ -4830,6 +4831,7 @@ const I18N = {
     positiveWord: "إيجابية",
     b0CasesLbl: "حالات B0",
     noDateColWarning: "بدون عمود تاريخ — احتُسب كل الملف بدون فلترة بالفترة",
+    dateColIsTimestampWarning: "عمود التاريخ المستخدم هو 'طابع زمني' تعبئة النموذج ('{col}')، وليس تاريخ الفحص الفعلي — لو أي صفوف قديمة أو مكررة انعبأت أو تعدّلت اليوم، قد تُحتسب خطأً ضمن هذه الفترة. تأكد من وجود عمود تاريخ فحص حقيقي بالملف.",
     noIdColWarning: "تم رفع ملف لكن لم يُحدد عمود ID Number",
     positiveCasesBirad45: "الحالات الإيجابية (BI-RADS 4 و 5)",
     positiveCasesTestResult: "الحالات الإيجابية (نتيجة الفحص)",
@@ -8338,6 +8340,24 @@ function findCol(labels, hints) {
     if (i !== -1) return i;
   }
   return -1;
+}
+
+// True when a column header is the Google-Form/Excel "طابع زمني" (timestamp
+// — i.e. when the row was submitted/edited) rather than a real exam date.
+// This column is listed as the LAST-priority fallback in MODULES.*.dateColHints
+// (for hospitals whose file has no clearly-named exam-date column), but it is
+// deliberately distrusted everywhere else in this file (findFallbackDateInRow
+// excludes it outright) because editing/resubmitting an old row changes this
+// value to "today" regardless of when the actual exam happened — so a hospital
+// whose PRIMARY date column resolves to this one can show phantom cases in
+// the current period. We can't safely stop using it as a fallback (a hospital
+// with no other date column at all would fall back to "no date column found",
+// which per noDateColWarning counts its ENTIRE file with no period filtering —
+// a worse outcome), so instead we surface a visible warning whenever it ends
+// up selected, so the admin can check the source file.
+function isTimestampColumnName(name) {
+  const n = normalizeLabel(name);
+  return n === 'طابع زمني' || n === 'timestamp' || n.includes('طابع زمني') || n.includes('timestamp');
 }
 
 function populateColumnSelect(selectEl, headerRow, dataRows) {
@@ -19384,8 +19404,22 @@ function generateDetailedReport(instant, overrideRange) {
     .map(name => {
       const res = collectReportScanRowsForHospital(name, combined.range);
       if (res.error) return { name, res };
+      // Keep a case only if the GLOBAL cross-hospital pass (combined.cases,
+      // the exact same data the Ministry/Holding export files are built
+      // from) ALSO kept it and attributes it to THIS hospital. The old
+      // condition (`!globalOwnerByNum.has(c.num) || owner===name`) only
+      // ever dropped a case belonging to ANOTHER hospital — a case this
+      // hospital's own local scan found but the global pass excluded
+      // entirely (already screened per the audit file, bad/ambiguous date,
+      // age outside range as resolved globally, etc.) had no owner entry
+      // at all, so `!globalOwnerByNum.has(...)` was true and it survived
+      // here anyway. That silently inflated this report's per-hospital and
+      // "مجموع المستشفيات" positive-case totals ABOVE the exported Ministry
+      // file's own count — confirmed as the exact cause of a real,
+      // reported mismatch (report showed 9 positive breast cases for a
+      // month the exported file showed 8 for).
       const ownedCases = res.cases
-        .filter(c => !globalOwnerByNum.has(c.num) || globalOwnerByNum.get(c.num) === name)
+        .filter(c => globalOwnerByNum.get(c.num) === name)
         .map(c => globalCaseByNum.has(c.num) ? globalCaseByNum.get(c.num) : c);
       return { name, res: { ...res, cases: ownedCases } };
     })
@@ -19781,16 +19815,26 @@ function generateReport(autoRefresh, overrideRange) {
       // the "الصافي النهائي" shown in "تقرير تفصيلي" for the same hospital/period.
       const hospRes = collectReportScanRowsForHospital(name, range, sharedAuditByNumReport);
       if (!hospRes.error) {
-        // Cross-hospital ownership filter (see the pre-pass above) — a
-        // case belonging to a DIFFERENT hospital per the global
-        // resolution is dropped here, so it's counted exactly once
-        // across the whole report instead of once per hospital it
-        // happens to appear in. The case's own fields are also swapped
-        // for the globally-resolved version (see globalCaseByNum note
-        // above) — same ID, but the clinically-correct result.
+        // Cross-hospital ownership filter (see the pre-pass above) — keep
+        // a case ONLY if the GLOBAL pass (globalScan = collectReportScanRows,
+        // the exact same data the Ministry/Holding export files are built
+        // from) also kept it and attributes it to THIS hospital. Dropping
+        // only cases owned by a DIFFERENT hospital (the old condition)
+        // left in any case this hospital's own local scan found but the
+        // global pass excluded entirely for some other reason (already
+        // screened per the audit file, bad/ambiguous date, age resolved
+        // differently once every hospital's file is considered together,
+        // etc.) — that had no entry in globalOwnerByNum at all, so it
+        // slipped through unfiltered. Confirmed as the exact cause of a
+        // real, reported mismatch: this report's "الحالات الإيجابية" KPI
+        // showed 9 positive breast cases for a month the exported Ministry
+        // file (built from the same global pass) showed only 8 for. The
+        // case's own fields are also swapped for the globally-resolved
+        // version (see globalCaseByNum note above) — same ID, but the
+        // clinically-correct result.
         const ownedCases = globalOwnerByNum
           ? hospRes.cases
-              .filter(c => !globalOwnerByNum.has(c.num) || globalOwnerByNum.get(c.num) === name)
+              .filter(c => globalOwnerByNum.get(c.num) === name)
               .map(c => (globalCaseByNum && globalCaseByNum.has(c.num)) ? globalCaseByNum.get(c.num) : c)
           : hospRes.cases;
         achieved     = ownedCases.length;
@@ -19810,6 +19854,12 @@ function generateReport(autoRefresh, overrideRange) {
       }
       if (st.dateIdx < 0 && st.pending.dataRows.length > 0) {
         warnings.push(`${hospitalDisplayName(name)}: ${t('noDateColWarning')}`);
+      } else if (st.dateIdx >= 0 && isTimestampColumnName(st.pending.headerRow[st.dateIdx])) {
+        // See isTimestampColumnName() comment — this hospital's primary exam-
+        // date column resolved to the form's submission timestamp rather than
+        // a real exam date, which can miscount old/edited rows into the
+        // current period. Flag it rather than silently trusting it.
+        warnings.push(`${hospitalDisplayName(name)}: ${t('dateColIsTimestampWarning').replace('{col}', String(st.pending.headerRow[st.dateIdx] || '').trim())}`);
       } else if (badDate > 0) {
         warnings.push(`${hospitalDisplayName(name)}: ${t('rowsUnreadableDate').replace('{n}', badDate).replace(/^، /, '').replace(/^, /, '')}`);
       }
