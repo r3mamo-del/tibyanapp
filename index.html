@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.15.1</span>
+  <span id="app-version">الإصدار 8.16.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -9230,6 +9230,10 @@ function collectReportScanRowsUncached(range) {
       }
     }
     const preferMonthFirst = st.dateOrderPreference === 'monthFirst';
+    if (st.yearFirst2DigitPreference === undefined) {
+      st.yearFirst2DigitPreference = st.dateIdx >= 0 ? detectTwoDigitYearFirstPreference(st.pending.dataRows, st.dateIdx) : null;
+    }
+    parseCellDate.preferYearFirst2Digit = !!st.yearFirst2DigitPreference;
     const mainSiblings = [st.secondaryDateIdx, st.tertiaryDateIdx].filter(c => typeof c === 'number' && c >= 0);
     if (st.dateContextResolution === undefined) {
       st.dateContextResolution = buildDateContextResolution(st.pending.dataRows, st.dateIdx, mainSiblings, st.manualMonthBoundaries);
@@ -10636,6 +10640,58 @@ function detectDominantDateOrder(dataRows, dateColIdx) {
     yearFirst: resolve(yearFirstDayFirstEvidence, yearFirstMonthFirstEvidence),
   };
 }
+// Confirmed real case (حريملاء, breast module): a column's 2-digit-year
+// dates are written YEAR-FIRST — "yy/mm/dd" (e.g. "25/10/26" = 26 Oct
+// 2025) — not the usually-assumed "a/b/yy" (day/month first, year last)
+// that parseCellDate() defaults to for short years. The existing
+// implausible-year fallback inside parseCellDate already self-corrects
+// MOST rows of such a column (the naive year-last reading lands way
+// outside today ± 2 years, so the alternate year-first reading is tried
+// and wins) — but it only runs when the naive reading is clearly wrong.
+// For a handful of rows where the real DAY happens to be 26-31, the naive
+// (wrong) year-last reading computes a year like 2000+26=2026, which can
+// coincidentally also fall inside the "plausible" ± 2-year window, so the
+// self-correction never triggers and the wrong calendar date (and often
+// the wrong MONTH's bucket) silently wins. This scans a column's
+// unambiguous rows (where only one of the two interpretations is
+// plausible at all) to decide, with the same evidence/threshold approach
+// as detectDominantDateOrder above, whether 2-digit-year dates in this
+// column should be read year-first. Returns true/false, or null when
+// there isn't enough one-sided evidence to override the default.
+function detectTwoDigitYearFirstPreference(dataRows, dateColIdx) {
+  if (dateColIdx < 0) return null;
+  const SEP = '\\s*[\\/\\\\\\-.]\\s*';
+  const re = new RegExp(`^(\\d{1,2})${SEP}(\\d{1,2})${SEP}(\\d{1,2})$`);
+  const thisYearNow = new Date().getFullYear();
+  const yearPlausible = (y) => y >= thisYearNow - 2 && y <= thisYearNow + 2;
+  let yearFirstEvidence = 0, yearLastEvidence = 0;
+  for (let i = 0; i < dataRows.length; i++) {
+    const raw = dataRows[i][dateColIdx];
+    if (raw == null || raw === '') continue;
+    const s = westernDigits(String(raw).trim());
+    const m = s.match(re);
+    if (!m) continue;
+    const p0 = +m[1], p1 = +m[2], p2 = +m[3];
+    // Hypothesis A ("a/b/yy", year last): valid only if p0/p1 can form a
+    // day/month pair (both ≤ 31, at least one ≤ 12 to serve as the month).
+    const validA = p0 >= 1 && p0 <= 31 && p1 >= 1 && p1 <= 12
+      || p1 >= 1 && p1 <= 31 && p0 >= 1 && p0 <= 12;
+    const plausibleA = validA && yearPlausible(2000 + p2);
+    // Hypothesis B ("yy/m/d", year first): valid only if p1/p2 form a
+    // genuine month/day pair.
+    const validB = p1 >= 1 && p1 <= 12 && p2 >= 1 && p2 <= 31;
+    const plausibleB = validB && yearPlausible(2000 + p0);
+    if (plausibleA && !plausibleB) yearLastEvidence++;
+    else if (plausibleB && !plausibleA) yearFirstEvidence++;
+    // Both (or neither) plausible: genuinely ambiguous from this row
+    // alone — contributes no evidence either way.
+  }
+  const total = yearFirstEvidence + yearLastEvidence;
+  if (total < 3) return null; // not enough one-sided evidence to trust
+  if (yearFirstEvidence / total >= 0.8) return true;
+  if (yearLastEvidence / total >= 0.8) return false;
+  return null; // mixed/inconclusive — leave the default behavior alone
+}
 // SEQUENTIAL MONTH-CONTEXT RESOLUTION — an alternative to guessing when a
 // date is genuinely ambiguous (day and month both ≤ 12): hospital exports
 // are entered chronologically, so instead of swapping day/month against a
@@ -11129,23 +11185,39 @@ function parseCellDate(v, preferMonthFirst) {
       // 2025-11-02) and sent it to badDate as unreadable, even though
       // the very same file's double-digit-day rows ("25/10/30") already
       // parsed correctly via the fallback below.
-      y = 2000 + (+parts[2]);
-      const a = +parts[0], b = +parts[1];
-      if (a > 12)      { d = a; m = b; }
-      else if (b > 12) { m = a; d = b; }
-      else             { d = a; m = b; if (a !== b) parseCellDate.lastWasAmbiguous = true; }
-      // Safe, additive fallback: if this DD/MM/YY reading gives an
-      // implausible year AND the first segment is also exactly 2 digits
-      // (so it could itself be a year), try YEAR-FIRST (YY/MM/DD)
-      // instead — confirmed present in real hospital exports. Only used
-      // when the standard reading is already implausible, so this never
-      // changes behavior for dates that already parse correctly.
-      const thisYearNow = new Date().getFullYear();
-      if ((y < thisYearNow - 2 || y > thisYearNow + 2) && parts[0].length === 2) {
-        const altY = 2000 + (+parts[0]), altM = +parts[1], altD = +parts[2];
-        if (altM >= 1 && altM <= 12 && altD >= 1 && altD <= 31 &&
-            altY >= thisYearNow - 2 && altY <= thisYearNow + 2) {
-          y = altY; m = altM; d = altD;
+      {
+        const p0 = +parts[0], p1 = +parts[1], p2 = +parts[2];
+        // Column-level evidence (detectTwoDigitYearFirstPreference) can
+        // confirm this column's 2-digit-year dates are written YEAR-FIRST
+        // ("yy/mm/dd", e.g. "25/10/26" = 26 Oct 2025) rather than the
+        // usual year-last assumption below. Without this, a row whose
+        // real day is 26-31 can compute a year-last reading (2000+day)
+        // that coincidentally ALSO looks plausible, so the implausible-
+        // year fallback further below never triggers and the wrong
+        // calendar date silently wins — the confirmed حريملاء bug.
+        if (parseCellDate.preferYearFirst2Digit && parts[0].length === 2 &&
+            p1 >= 1 && p1 <= 12 && p2 >= 1 && p2 <= 31) {
+          y = 2000 + p0; m = p1; d = p2;
+        } else {
+          y = 2000 + p2;
+          const a = p0, b = p1;
+          if (a > 12)      { d = a; m = b; }
+          else if (b > 12) { m = a; d = b; }
+          else             { d = a; m = b; if (a !== b) parseCellDate.lastWasAmbiguous = true; }
+          // Safe, additive fallback: if this DD/MM/YY reading gives an
+          // implausible year AND the first segment is also exactly 2 digits
+          // (so it could itself be a year), try YEAR-FIRST (YY/MM/DD)
+          // instead — confirmed present in real hospital exports. Only used
+          // when the standard reading is already implausible, so this never
+          // changes behavior for dates that already parse correctly.
+          const thisYearNow = new Date().getFullYear();
+          if ((y < thisYearNow - 2 || y > thisYearNow + 2) && parts[0].length === 2) {
+            const altY = 2000 + p0, altM = p1, altD = p2;
+            if (altM >= 1 && altM <= 12 && altD >= 1 && altD <= 31 &&
+                altY >= thisYearNow - 2 && altY <= thisYearNow + 2) {
+              y = altY; m = altM; d = altD;
+            }
+          }
         }
       }
     } else return null;
@@ -18613,6 +18685,10 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
       }
   }
   const preferMonthFirst = st.dateOrderPreference === 'monthFirst';
+  if (st.yearFirst2DigitPreference === undefined) {
+    st.yearFirst2DigitPreference = st.dateIdx >= 0 ? detectTwoDigitYearFirstPreference(st.pending.dataRows, st.dateIdx) : null;
+  }
+  parseCellDate.preferYearFirst2Digit = !!st.yearFirst2DigitPreference;
   // Priority order for BOTH reading fallback and ambiguity corroboration,
   // explicitly requested: sample date first, lab result second, kit-order
   // date third — tertiaryDateIdx now covers this generally (not just
