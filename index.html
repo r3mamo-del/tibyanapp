@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.18.0</span>
+  <span id="app-version">الإصدار 8.19.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -13947,11 +13947,18 @@ function isCaseClosed(e) {
 function getColonNoShowDisplayResult(e) {
   if (e.module !== 'colon') return '';
   if (String(e.endoscopyResult || '').trim() || String(e.finalDiagnosis || '').trim()) return '';
+  // مطابقة تمامًا لنفس الفحصين اللذين يُغلقان الحالة بـcolonIncompleteStep
+  // أعلاه — لا نسخة أضيق منهما. كانت تستخدم isNoShowValue (مطابقة حرفية
+  // دقيقة لعبارتين فقط)، بينما الإغلاق الفعلي يستخدم classifyColonAttendance
+  // (أي قيمة غير "نعم" تُغلق) و isRefusedOrNoShowValue (مطابقة جزئية أوسع)
+  // — فكثير من الحالات كانت تُغلق فعليًا لكن بصياغة لا تطابق العبارتين
+  // الحرفيتين بالضبط، فتُغلق بصمت بدون ما يظهر لها أي نص نتيجة. مؤكَّد
+  // كحالة واقعية: 140+ حالة مغلقة بالدرعية ما ظهر لها السطر إطلاقًا.
   const labTestAttendanceRaw = e.attendanceReason || e.consentForExam || '';
-  if (isNoShowValue(labTestAttendanceRaw)) return t('referredSocialServiceLbl');
+  if (classifyColonAttendance(labTestAttendanceRaw) === 'stop') return t('referredSocialServiceLbl');
   // عمود "حضر موعد المنظار" (e.biopsyDone) — نفس المبدأ لو حضر التحاليل
   // لكن لم يحضر موعد المنظار نفسه.
-  if (isNoShowValue(e.biopsyDone)) return t('referredSocialServiceLbl');
+  if (isRefusedOrNoShowValue(e.biopsyDone)) return t('referredSocialServiceLbl');
   return '';
 }
 // A case counts as CONFIRMED cancer only when the reference sheet's own
