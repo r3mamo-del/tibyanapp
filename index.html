@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.19.0</span>
+  <span id="app-version">الإصدار 8.20.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6967,6 +6967,7 @@ function computeLivePositiveCases(moduleKey, range) {
         const labels = (st?.pending?.headerRow || []).map(h => normalizeLabel(String(h == null ? '' : h)));
         colIdxCache[c.hospital] = {
           consentIdx: findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']),
+          phoneContactIdx: findCol(labels, ['التواصل هاتفيا', 'التواصل هاتفياً', 'phone contact', 'تم التواصل']),
           rejectionReasonIdx: findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']),
           dateOscIdx: findCol(labels, ['date osc', 'تاريخ osc']),
           endoscopyDoneIdx: findCol(labels, ['is endoscopy procedure has been done', 'endoscopy procedure has been done', 'حضر موعد المنظار', 'تم المنظار', 'هل تم المنظار']),
@@ -6981,6 +6982,7 @@ function computeLivePositiveCases(moduleKey, range) {
       const r = c.row || [];
       c.consentForExam = idx.consentIdx !== -1 ? normalizeConsentValue(r[idx.consentIdx]) : '';
       c.attendanceReason = idx.consentIdx !== -1 ? String(r[idx.consentIdx] ?? '').trim() : '';
+      c.phoneContactStatus = idx.phoneContactIdx !== -1 ? String(r[idx.phoneContactIdx] ?? '').trim() : '';
       c.rejectionReason = idx.rejectionReasonIdx !== -1 ? String(r[idx.rejectionReasonIdx] ?? '').trim() : '';
       c.dateOsc = idx.dateOscIdx !== -1 ? (parseCellDate(r[idx.dateOscIdx])?.toISOString() || null) : null;
       c.biopsyDone = idx.endoscopyDoneIdx !== -1 ? String(r[idx.endoscopyDoneIdx] ?? '').trim() : '';
@@ -7005,7 +7007,7 @@ function computeLivePositiveCases(moduleKey, range) {
       // sources above, never overwrites anything already resolved live.
       const stored = positiveLog.find(e => e.module === 'colon' && e.num === c.num);
       if (stored) {
-        ['consentForExam','attendanceReason','rejectionReason','dateOsc','biopsyDone','biopsyDate',
+        ['consentForExam','attendanceReason','phoneContactStatus','rejectionReason','dateOsc','biopsyDone','biopsyDate',
          'endoscopyResult','biopsyTaken','finalDiagnosis','cancerStage','treatmentPlan','notes'].forEach(k => {
           if (stored[k] && !c[k]) c[k] = stored[k];
         });
@@ -13730,6 +13732,20 @@ function isRefusedOrNoShowValue(v) {
 }
 // Kept as an alias for any existing call sites — same broadened logic.
 function isRefusedValue(v) { return isRefusedOrNoShowValue(v); }
+// عمود "التواصل هاتفيا" — مرحلة التواصل المبدئي مع المريض، أبكر حتى من
+// حجز موعد التحاليل. قيمه مختلفة عن عمود الحضور (ما فيها "لم يحضر")، لذا
+// فحص منفصل بعبارات مختلفة: "لا يوجد رد"/"لم يتم الرد" (تعذّر الوصول
+// هاتفيًا) أو رفض من نفس هالمرحلة المبكرة.
+function isNoResponseOrRefusedPhoneContact(v) {
+  const vn = normalizeArabicForMatch(v);
+  if (!vn) return false;
+  const patterns = [
+    'لا يوجد رد', 'لم يتم الرد', 'لم يرد', 'عدم الرد', 'لا رد',
+    'رفض المريض', 'رفضت', 'رفض',
+    'no answer', 'no response', 'did not answer', 'not answered',
+  ];
+  return patterns.some(p => vn.includes(normalizeArabicForMatch(p)));
+}
 const CONSENT_ATTENDANCE_MAP_NORM = Object.fromEntries(
   Object.entries(CONSENT_ATTENDANCE_MAP).map(([k, v]) => [normalizeArabicForMatch(k), v])
 );
@@ -13819,6 +13835,13 @@ function colonIncompleteStep(e) {
       if (st && st.ownFollowUpMap) return 'notFollowedUp';
     }
   }
+  // عمود "التواصل هاتفيا" — مرحلة أبكر من موعد التحاليل نفسه: لو ما قدرنا
+  // نوصل للمريض أصلاً هاتفيًا (لا يوجد رد) أو رفض من هالمرحلة المبكرة،
+  // فعمود "حضر موعد الحاليل" يضل فاضي منطقيًا (ما صار حجز موعد أصلاً) —
+  // كان يُحسب "لم تُؤخذ الموافقة" (ناقصة) للأبد بدل ما يُغلق، رغم إنه
+  // نفس مبدأ عدم الحضور بالضبط. مؤكَّد كحالة واقعية: 16 حالة بالدرعية من
+  // أصل الـ35 "consent" العالقة سببها هذا بالضبط.
+  if (status === 'blank' && isNoResponseOrRefusedPhoneContact(e.phoneContactStatus)) return null;
   if (status === 'blank') return 'consent';
   if (status === 'stop') return null; // الحالة تُغلق فورًا، ما فيه خطوة ناقصة
   if (String(e.rejectionReason || '').includes('تأجيل')) return null; // تأجيل يُغلق أيضًا
@@ -13959,6 +13982,9 @@ function getColonNoShowDisplayResult(e) {
   // عمود "حضر موعد المنظار" (e.biopsyDone) — نفس المبدأ لو حضر التحاليل
   // لكن لم يحضر موعد المنظار نفسه.
   if (isRefusedOrNoShowValue(e.biopsyDone)) return t('referredSocialServiceLbl');
+  // عمود "التواصل هاتفيا" — تعذّر الوصول للمريض من الأساس (قبل حتى حجز
+  // موعد التحاليل)، فعمود الحضور يضل فاضي منطقيًا — نفس مبدأ عدم الحضور.
+  if (!labTestAttendanceRaw.trim() && isNoResponseOrRefusedPhoneContact(e.phoneContactStatus)) return t('referredSocialServiceLbl');
   return '';
 }
 // A case counts as CONFIRMED cancer only when the reference sheet's own
@@ -15357,6 +15383,7 @@ function scanColonPositiveSheet(hospital) {
   const timestampIdx     = findCol(labels, ['طابع زمني', 'timestamp']);
   const testResultIdx    = findCol(labels, ['test result', 'result', 'نتيجة الفحص', 'النتيجة']);
   const consentIdx       = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
+  const phoneContactIdx  = findCol(labels, ['التواصل هاتفيا', 'التواصل هاتفياً', 'phone contact', 'تم التواصل']);
   const rejectionReasonIdx = findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']);
   const endoscopyNoReasonIdx = findCol(labels, ['what is the reason', 'إذا كانت الإجابة لا', 'في حال لا']);
   const dateOscIdx       = findCol(labels, ['date osc', 'تاريخ osc']);
@@ -15453,6 +15480,7 @@ function scanColonPositiveSheet(hospital) {
 
     const consentForExam = consentIdx !== -1 ? normalizeConsentValue(r[consentIdx]) : '';
     const attendanceReason = consentIdx !== -1 ? String(r[consentIdx] ?? '').trim() : '';
+    const phoneContactStatus = phoneContactIdx !== -1 ? String(r[phoneContactIdx] ?? '').trim() : '';
     const rejectionReason = rejectionReasonIdx !== -1 ? String(r[rejectionReasonIdx] ?? '').trim() : '';
     const endoscopyNoReason2 = endoscopyNoReasonIdx !== -1 ? String(r[endoscopyNoReasonIdx] ?? '').trim() : '';
     const treatedNoReason = treatedNoReasonIdx !== -1 ? String(r[treatedNoReasonIdx] ?? '').trim() : '';
@@ -15478,6 +15506,7 @@ function scanColonPositiveSheet(hospital) {
       age, ageExcluded,
       consentForExam,
       attendanceReason,
+      phoneContactStatus,
       rejectionReason,
       endoscopyNoReason2,
       treatedNoReason,
@@ -15600,11 +15629,12 @@ function scanHospitalForNewPositives(moduleKey, hospital) {
   // لحظة اكتشاف الحالة، بدل ما تبقى فاضية وتُرصد لاحقًا "لم تُسجَّل"
   // رغم إن بياناتها موجودة فعليًا بنفس الملف المرفوع أصلًا. مطابقة
   // بالضبط لنفس أسماء الأعمدة المستخدمة في scanColonPositiveSheet.
-  let consentIdx = -1, rejectionReasonIdx = -1, endoscopyNoReasonIdx = -1, dateOscIdx = -1,
+  let consentIdx = -1, phoneContactIdx = -1, rejectionReasonIdx = -1, endoscopyNoReasonIdx = -1, dateOscIdx = -1,
       endoscopyDoneIdx = -1, endoscopyDateIdx = -1, endoscopyResultIdx = -1, biopsyTakenIdx = -1,
       biopsyResultIdx = -1, cancerStageIdx = -1, treatedIdx = -1, treatedNoReasonIdx = -1, treatStartIdx = -1;
   if (moduleKey === 'colon') {
     consentIdx = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
+    phoneContactIdx = findCol(labels, ['التواصل هاتفيا', 'التواصل هاتفياً', 'phone contact', 'تم التواصل']);
     rejectionReasonIdx = findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']);
     endoscopyNoReasonIdx = findCol(labels, ['what is the reason', 'إذا كانت الإجابة لا', 'في حال لا']);
     dateOscIdx = findCol(labels, ['date osc', 'تاريخ osc']);
@@ -15630,6 +15660,7 @@ function scanHospitalForNewPositives(moduleKey, hospital) {
     const colonFollowUp = moduleKey === 'colon' ? {
       consentForExam: consentIdx !== -1 ? normalizeConsentValue(r[consentIdx]) : '',
       attendanceReason: consentIdx !== -1 ? String(r[consentIdx] ?? '').trim() : '',
+      phoneContactStatus: phoneContactIdx !== -1 ? String(r[phoneContactIdx] ?? '').trim() : '',
       rejectionReason: rejectionReasonIdx !== -1 ? String(r[rejectionReasonIdx] ?? '').trim() : '',
       endoscopyNoReason2: endoscopyNoReasonIdx !== -1 ? String(r[endoscopyNoReasonIdx] ?? '').trim() : '',
       dateOsc: dateOscIdx !== -1 ? (parseCellDate(r[dateOscIdx])?.toISOString() || null) : null,
@@ -15810,6 +15841,7 @@ async function fetchColonReferenceSheetDataFromGitHub() {
     ]);
     const timestampIdx = findCol(labels, ['طابع زمني', 'timestamp']);
     const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
+    const phoneContactIdx = findCol(labels, ['التواصل هاتفيا', 'التواصل هاتفياً', 'phone contact', 'تم التواصل']);
     const rejectionIdx = findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']);
     const endoscopyNoReasonIdx = findCol(labels, ['what is the reason', 'إذا كانت الإجابة لا', 'في حال لا']);
     const dateOscIdx = findCol(labels, ['date osc', 'تاريخ osc']);
@@ -15846,6 +15878,7 @@ async function fetchColonReferenceSheetDataFromGitHub() {
         age: ageIdx !== -1 ? extractAge(r[ageIdx]) : null,
         consentForExam: consentIdx !== -1 ? normalizeConsentValue(r[consentIdx]) : '',
         attendanceReason: consentIdx !== -1 ? String(r[consentIdx] ?? '').trim() : '',
+        phoneContactStatus: phoneContactIdx !== -1 ? String(r[phoneContactIdx] ?? '').trim() : '',
         rejectionReason: rejectionIdx !== -1 ? String(r[rejectionIdx] ?? '').trim() : '',
         endoscopyNoReason2: endoscopyNoReasonIdx !== -1 ? String(r[endoscopyNoReasonIdx] ?? '').trim() : '',
         treatedNoReason: treatedNoReasonIdx !== -1 ? String(r[treatedNoReasonIdx] ?? '').trim() : '',
@@ -16005,6 +16038,7 @@ async function fetchColonReferenceSheetData() {
     // that same row correctly reads the actual current date).
     const timestampIdx = findCol(labels, ['طابع زمني', 'timestamp']);
     const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
+    const phoneContactIdx = findCol(labels, ['التواصل هاتفيا', 'التواصل هاتفياً', 'phone contact', 'تم التواصل']);
     const rejectionIdx = findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']);
     const endoscopyNoReasonIdx = findCol(labels, ['what is the reason', 'إذا كانت الإجابة لا', 'في حال لا']);
     const dateOscIdx = findCol(labels, ['date osc', 'تاريخ osc']);
@@ -16050,6 +16084,7 @@ async function fetchColonReferenceSheetData() {
         age: ageIdx !== -1 ? extractAge(r[ageIdx]) : null,
         consentForExam: consentIdx !== -1 ? normalizeConsentValue(r[consentIdx]) : '',
         attendanceReason: consentIdx !== -1 ? String(r[consentIdx] ?? '').trim() : '',
+        phoneContactStatus: phoneContactIdx !== -1 ? String(r[phoneContactIdx] ?? '').trim() : '',
         rejectionReason: rejectionIdx !== -1 ? String(r[rejectionIdx] ?? '').trim() : '',
         endoscopyNoReason2: endoscopyNoReasonIdx !== -1 ? String(r[endoscopyNoReasonIdx] ?? '').trim() : '',
         treatedNoReason: treatedNoReasonIdx !== -1 ? String(r[treatedNoReasonIdx] ?? '').trim() : '',
@@ -16576,6 +16611,7 @@ async function searchPositiveCasesInReferenceSheet() {
       if (currentModule === 'colon') {
         e.consentForExam = ref.consentForExam || e.consentForExam;
         e.attendanceReason = ref.attendanceReason || e.attendanceReason;
+        e.phoneContactStatus = ref.phoneContactStatus || e.phoneContactStatus;
         e.rejectionReason = ref.rejectionReason || e.rejectionReason;
         e.endoscopyNoReason2 = ref.endoscopyNoReason2 || e.endoscopyNoReason2;
         e.treatedNoReason = ref.treatedNoReason || e.treatedNoReason;
@@ -17590,6 +17626,7 @@ async function loadHospitalFromGitHub(moduleKey, hospital) {
       const labels = posConverted.headerRow.map(h => normalizeLabel(String(h == null ? '' : h)));
       const idIdx = findCol(labels, ['national id', 'id number', 'id', 'رقم الهوية', 'الهوية']);
       const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
+      const phoneContactIdx = findCol(labels, ['التواصل هاتفيا', 'التواصل هاتفياً', 'phone contact', 'تم التواصل']);
       const rejectionReasonIdx = findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']);
       const dateOscIdx = findCol(labels, ['date osc', 'تاريخ osc']);
       const endoscopyDoneIdx = findCol(labels, ['is endoscopy procedure has been done', 'endoscopy procedure has been done', 'حضر موعد المنظار', 'تم المنظار', 'هل تم المنظار']);
@@ -17606,6 +17643,7 @@ async function loadHospitalFromGitHub(moduleKey, hospital) {
           map.set(num, {
             consentForExam: consentIdx !== -1 ? normalizeConsentValue(r[consentIdx]) : '',
             attendanceReason: consentIdx !== -1 ? String(r[consentIdx] ?? '').trim() : '',
+            phoneContactStatus: phoneContactIdx !== -1 ? String(r[phoneContactIdx] ?? '').trim() : '',
             rejectionReason: rejectionReasonIdx !== -1 ? String(r[rejectionReasonIdx] ?? '').trim() : '',
             dateOsc: dateOscIdx !== -1 ? (parseCellDate(r[dateOscIdx])?.toISOString() || null) : null,
             biopsyDone: endoscopyDoneIdx !== -1 ? String(r[endoscopyDoneIdx] ?? '').trim() : '',
@@ -18082,6 +18120,7 @@ function scanForHospitalOwnFollowUpSheet(wb, dominantSheetName) {
     const idIdx = findCol(labels, ['national id', 'id number', 'id', 'رقم الهوية', 'الهوية']);
     if (idIdx === -1) continue;
     const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص']);
+    const phoneContactIdx = findCol(labels, ['التواصل هاتفيا', 'التواصل هاتفياً', 'phone contact', 'تم التواصل']);
     const dateOscIdx = findCol(labels, ['date osc', 'تاريخ osc']);
     const endoscopyDoneIdx = findCol(labels, ['is endoscopy procedure has been done', 'حضر موعد المنظار', 'تم المنظار']);
     const endoscopyDateIdx = findCol(labels, ['endoscopy date', 'موعد المنظار', 'تاريخ المنظار']);
@@ -18098,6 +18137,7 @@ function scanForHospitalOwnFollowUpSheet(wb, dominantSheetName) {
       byId.set(num, {
         consentForExam: consentIdx !== -1 ? normalizeConsentValue(r[consentIdx]) : '',
         attendanceReason: consentIdx !== -1 ? String(r[consentIdx] ?? '').trim() : '',
+        phoneContactStatus: phoneContactIdx !== -1 ? String(r[phoneContactIdx] ?? '').trim() : '',
         dateOsc: dateOscIdx !== -1 ? (parseCellDate(r[dateOscIdx])?.toISOString() || null) : null,
         biopsyDone: endoscopyDoneIdx !== -1 ? String(r[endoscopyDoneIdx] ?? '').trim() : '',
         biopsyDate: endoscopyDateIdx !== -1 ? (parseCellDate(r[endoscopyDateIdx])?.toISOString() || null) : null,
