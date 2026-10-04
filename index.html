@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.24.0</span>
+  <span id="app-version">الإصدار 8.25.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -7012,6 +7012,15 @@ function computeLivePositiveCases(moduleKey, range) {
          'endoscopyResult','biopsyTaken','finalDiagnosis','cancerStage','treatmentPlan','notes'].forEach(k => {
           if (stored[k] && !c[k]) c[k] = stored[k];
         });
+        // masterRefMatched لازم يُنسخ صراحة، مو بنفس حلقة "املأ الفاضي
+        // فقط" أعلى — قيمته المهمة هي "false" نفسها (يعني "غير موجودة
+        // بالملف المرجعي إطلاقًا")، وهذي قيمة falsy فما كانت تنتقل أبدًا
+        // عبر شرط "stored[k] && !c[k]" (يتطلب truthy). فكانت كل حالات
+        // الدرعية غير الموجودة بالملف المرجعي تظل masterRefMatched:
+        // undefined بالكائن الحي (رغم كونها false صحيح بـpositiveLog)،
+        // فيفشل فحص "=== false" بـcolonIncompleteStep وتُصنَّف خطأً
+        // "لم يتم اخذ التحليل" بدل "لم تتابع" — مؤكَّد كحالة واقعية حقيقية.
+        if (c.masterRefMatched === undefined) c.masterRefMatched = stored.masterRefMatched;
       }
     });
     return { cases: positives };
