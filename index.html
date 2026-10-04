@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.22.0</span>
+  <span id="app-version">الإصدار 8.23.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -15961,10 +15961,13 @@ async function syncColonReferenceFromGitHub() {
     const ref = byId.get(e.num);
     e.masterRefMatched = !!ref;
     if (!ref) return;
-    const existingDt = e.date ? new Date(e.date) : (e.examDate ? new Date(e.examDate) : null);
-    const refDt = ref.regDate ? new Date(ref.regDate) : null;
-    const refIsLaterOrEqual = !existingDt || (refDt && refDt >= existingDt);
-    if (!refIsLaterOrEqual) return;
+    // ملاحظة: كان هنا شرط "التاريخ الأحدث يفوز" (refIsLaterOrEqual) يمنع
+    // كل الإثراء لأي حالة عندها e.date/e.examDate أصلاً إذا تعذّر تحليل
+    // ref.regDate (وهو الغالب بهذا الملف لعدم وجود عمود تاريخ مطابق) —
+    // رغم أن الدمج تحته أصلاً لا يملأ إلا الحقول الفاضية (v && !e[k])
+    // ولا يطغى على أي بيانات موجودة أبدًا. فكان الشرط عديم الفائدة
+    // ويمنع وصول بيانات صحيحة ومطابقة فعليًا (مثل consentForExam) لمئات
+    // الحالات. أُزيل لأن الدمج تحته آمن وغير هدّام بطبيعته.
     Object.keys(ref).forEach(k => {
       if (k === 'hospital' || k === 'regDate') return;
       const v = ref[k];
