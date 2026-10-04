@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.23.1</span>
+  <span id="app-version">الإصدار 8.24.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -13895,10 +13895,15 @@ function colonIncompleteStep(e) {
 }
 const COLON_INCOMPLETE_STEP_LABELS = {
   notFollowedUp: 'لم تتابع',
-  consent: 'لم تدرج بملف المتابعة',
-  dateOsc: 'لم يتم حجز موعد للعيادة',
-  endoscopyDone: 'لم يتم تحديد تم اخذ الخزعه من عدمها',
-  endoscopyDate: 'لم يتم تحديد موعد للخزعه',
+  consent: 'لم يتم اخذ التحليل', // عمود "حضر موعد الحاليل" فاضٍ — لم يُسجَّل حضور موعد التحاليل من عدمه
+  dateOsc: 'لم يتم تحديد حضور موعد العيادة', // عمود "Date OSC" فاضٍ تمامًا (لا نص ولا تاريخ)
+  // تصحيح: الخطوتان التاليتان كانتا تذكران "الخزعة" بالنص رغم أنهما
+  // تفحصان عمودي "موعد المنظار"/"حضر موعد المنظار" فعليًا — خطوة الخزعة
+  // نفسها منفصلة تمامًا (biopsyTaken/biopsyResult تحت). كانت تسبب لبسًا
+  // حقيقيًا بالتقرير المُرسَل للمستشفى (يبدو وكأن الناقص خزعة، والفعلي
+  // حضور موعد المنظار نفسه).
+  endoscopyDone: 'لم يتم تحديد حضور موعد المنظار',
+  endoscopyDate: 'لم يتم تحديد موعد المنظار',
   biopsyTaken: 'لم يتم تحديد هل تم اخذ خزعه ام لا',
   biopsyResult: 'لم يتم ادراج نتيجة الخزعه',
 };
