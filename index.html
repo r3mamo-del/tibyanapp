@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.16.0</span>
+  <span id="app-version">الإصدار 8.17.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -3907,6 +3907,8 @@ const I18N = {
     biopsyDateLbl: "Biopsy Date",
     consentGivenLbl: "Consent given for the exam?",
     reasonLbl: "Reason",
+    caseResultLbl: "Result",
+    referredSocialServiceLbl: "Referred to Social Services",
     biopsyDoneLbl: "Biopsy done?",
     postBiopsyApptLbl: "Post-biopsy appointment",
     notSetYet: "Not set yet",
@@ -4704,6 +4706,8 @@ const I18N = {
     biopsyDateLbl: "تاريخ الخزعة",
     consentGivenLbl: "تمت الموافقة على الفحص؟",
     reasonLbl: "السبب",
+    caseResultLbl: "النتيجة",
+    referredSocialServiceLbl: "تمت إحالته للخدمة الاجتماعية",
     biopsyDoneLbl: "تمت الخزعة؟",
     postBiopsyApptLbl: "موعد ما بعد الخزعة",
     notSetYet: "لم يُحدَّد بعد",
@@ -13922,6 +13926,19 @@ function isCaseClosed(e) {
   if (String(e.notes || '').toLowerCase().includes('referral')) return true;
   return false;
 }
+// عرض فقط — لا يغيّر أي بيانات بالملف الأصلي المرفوع/المزامن: حالات
+// القولون اللي عمود "موعد التحاليل" فيها = "لم يحضر" تُغلق فورًا أصلًا
+// (انظر colonIncompleteStep أعلاه)، لكن بطاقة سجل الحالات الإيجابية ما
+// كانت تعرض أي "نتيجة" لها إطلاقًا — فقط الموافقة/سبب الرفض. طُبِّق على
+// كل مستشفيات القولون (مو الدرعية فقط)، لأي حالة لسه ما سُجِّل لها نتيجة
+// فعلية (endoscopyResult/finalDiagnosis) بالملف المصدر — حالة سُجِّلت
+// لها نتيجة حقيقية لاحقًا تُعرض هي، مو هذا النص الافتراضي.
+function getColonNoShowDisplayResult(e) {
+  if (e.module !== 'colon') return '';
+  if (String(e.endoscopyResult || '').trim() || String(e.finalDiagnosis || '').trim()) return '';
+  const attendanceRaw = e.attendanceReason || e.consentForExam || '';
+  return isNoShowValue(attendanceRaw) ? t('referredSocialServiceLbl') : '';
+}
 // A case counts as CONFIRMED cancer only when the reference sheet's own
 // "Final diagnosis" / "Cancer stage" fields say so — never inferred from
 // the initial BI-RADS 4/5 flag alone, since most such cases turn out
@@ -14751,6 +14768,7 @@ function renderPositiveLog() {
         ${colonDatesBlock}
         ${e.module !== 'colon' ? row(t('biopsyDateLbl'), e.biopsyDate ? fmt(e.biopsyDate) : (e.biopsyStatus || (e.referenceConfirmed && nothingRecorded ? t('notRecorded') : t('notRecorded')))) : ''}
         ${e.module === 'colon' ? row(t('consentGivenLbl'), e.consentForExam ? (toEnglishYesNo(e.consentForExam) === 'No' && e.rejectionReason ? `${e.consentForExam} — ${t('reasonLbl')}: "${e.rejectionReason}"` : e.consentForExam) : (e.referenceConfirmed ? t('notRecorded') : null)) : ''}
+        ${e.module === 'colon' ? row(t('caseResultLbl'), getColonNoShowDisplayResult(e)) : ''}
         ${row(t('biopsyDoneLbl'), e.biopsyDone || (e.referenceConfirmed ? t('notRecorded') : t('notRecorded')))}
         ${row(t('postBiopsyApptLbl'), e.postBiopsyAppointment ? fmt(e.postBiopsyAppointment) : (e.referenceConfirmed ? t('notSetYet') : t('notRecorded')))}
         ${row(t('treatmentPlanLbl'), e.treatmentPlan || (e.referenceConfirmed ? t('notRecorded') : null))}
