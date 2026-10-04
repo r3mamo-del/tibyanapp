@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.20.0</span>
+  <span id="app-version">الإصدار 8.22.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6985,6 +6985,7 @@ function computeLivePositiveCases(moduleKey, range) {
       c.phoneContactStatus = idx.phoneContactIdx !== -1 ? String(r[idx.phoneContactIdx] ?? '').trim() : '';
       c.rejectionReason = idx.rejectionReasonIdx !== -1 ? String(r[idx.rejectionReasonIdx] ?? '').trim() : '';
       c.dateOsc = idx.dateOscIdx !== -1 ? (parseCellDate(r[idx.dateOscIdx])?.toISOString() || null) : null;
+      c.dateOscRaw = idx.dateOscIdx !== -1 ? String(r[idx.dateOscIdx] ?? '').trim() : '';
       c.biopsyDone = idx.endoscopyDoneIdx !== -1 ? String(r[idx.endoscopyDoneIdx] ?? '').trim() : '';
       c.biopsyDate = idx.endoscopyDateIdx !== -1 ? (parseCellDate(r[idx.endoscopyDateIdx])?.toISOString() || null) : null;
       c.endoscopyResult = idx.endoscopyResultIdx !== -1 ? String(r[idx.endoscopyResultIdx] ?? '').trim() : '';
@@ -7007,7 +7008,7 @@ function computeLivePositiveCases(moduleKey, range) {
       // sources above, never overwrites anything already resolved live.
       const stored = positiveLog.find(e => e.module === 'colon' && e.num === c.num);
       if (stored) {
-        ['consentForExam','attendanceReason','phoneContactStatus','rejectionReason','dateOsc','biopsyDone','biopsyDate',
+        ['consentForExam','attendanceReason','phoneContactStatus','rejectionReason','dateOsc','dateOscRaw','biopsyDone','biopsyDate',
          'endoscopyResult','biopsyTaken','finalDiagnosis','cancerStage','treatmentPlan','notes'].forEach(k => {
           if (stored[k] && !c[k]) c[k] = stored[k];
         });
@@ -13845,7 +13846,6 @@ function colonIncompleteStep(e) {
   if (status === 'blank') return 'consent';
   if (status === 'stop') return null; // الحالة تُغلق فورًا، ما فيه خطوة ناقصة
   if (String(e.rejectionReason || '').includes('تأجيل')) return null; // تأجيل يُغلق أيضًا
-  if (!String(e.dateOsc || '').trim()) return 'dateOsc';
   if (!String(e.biopsyDone || '').trim()) return 'endoscopyDone';
   // حضر موعد التحاليل لكن لم يحضر موعد المنظار (أو رفضه) — عمود "حضر موعد
   // المنظار" (e.biopsyDone) كان يُعامَل بالغلط كـ"مُجاب عليه" بمجرد وجود أي
@@ -13858,6 +13858,35 @@ function colonIncompleteStep(e) {
   // المنظار فعليًا؟" حيث "لا" الصريحة تعني لسه ما انسوى (بانتظار الإجراء)
   // وليست رفض/عدم حضور — إغلاقها غلط لو استخدمنا الفحص الأوسع.
   if (isRefusedOrNoShowValue(e.biopsyDone)) return null;
+  // هذا الفحص (DATE OSC) يأتي بعد فحص "حضر موعد المنظار" مباشرة — وليس
+  // قبله كما كان سابقًا — لأن ترتيب الأعمدة الفعلي بملف الدرعية نفسه هو:
+  // موعد المنظار ← حضر موعد المنظار ← ... ← Date OSC. لو ظل فحص DATE OSC
+  // قبل فحص عدم الحضور، فأي حالة حضرت موعد التحاليل لكن لم تحضر موعد
+  // المنظار (فيبقى DATE OSC فاضيًا منطقيًا لعدم وجود إجراء أصلاً) كانت
+  // تُصنَّف "لم يتم حجز موعد للعيادة" بدل إغلاقها فورًا كـ"لم تحضر" — مؤكَّد
+  // كحالة واقعية: 10 حالات بالدرعية عالقة بسبب هذا الترتيب بالضبط.
+  // اكتشاف إضافي مؤكَّد: عمود "Date OSC" بملف الدرعية الفعلي لا يحتوي
+  // تواريخ إطلاقًا — يحتوي "yes"/"No" نصيًا (حضور/عدم حضور موعد العيادة)
+  // بدل تاريخ حقيقي. parseCellDate يفشل بتحويل "yes"/"No" لتاريخ فيرجع
+  // null دائمًا، فكان فحص "DATE OSC فاضي؟" يُعامِل كل هذه الحالات (حتى
+  // "yes") كـ"لم يُحجز موعد" رغم إنها فعليًا محجوزة ومؤكَّدة — عالقة للأبد
+  // بسبب هذا بالضبط. الحل: نفس منطق أعمدة الحضور الأخرى — إذا توفّر تاريخ
+  // حقيقي مُحلَّل (dateOsc) فالموعد محجوز فعلًا، وإلا نرجع للنص الخام
+  // (dateOscRaw): "نعم/yes" تكمل السلسلة، "لا/no"/عبارة رفض أو عدم حضور
+  // تُغلق الحالة فورًا (تمت إحالته للخدمة الاجتماعية)، وأي نص آخر غير
+  // متوقَّع (قد يكون تاريخًا حقيقيًا فشل تحليله لسبب ما) يُعامَل بحذر
+  // كـ"محجوز" بدل إغلاق الحالة خطأً — نفس مبدأ classifyBreastBiopsyStatus.
+  const dateOscStatus = (() => {
+    if (e.dateOsc) return 'continue';
+    const raw = String(e.dateOscRaw || '').trim();
+    if (!raw) return 'blank';
+    const vn = normalizeArabicForMatch(raw);
+    if (vn === 'yes' || vn === 'y' || vn === normalizeArabicForMatch('نعم')) return 'continue';
+    if (vn === 'no' || vn === 'n' || vn === normalizeArabicForMatch('لا') || isRefusedOrNoShowValue(raw)) return 'stop';
+    return 'continue'; // نص غير متوقّع — افتراض آمن بأنه محجوز، تفاديًا لإغلاق خاطئ
+  })();
+  if (dateOscStatus === 'blank') return 'dateOsc';
+  if (dateOscStatus === 'stop') return null; // لم يحضر موعد العيادة (Date OSC) — تُغلق فورًا
   if (!String(e.biopsyDate || '').trim()) return 'endoscopyDate';
   const biopsyTakenRaw = String(e.biopsyTaken || '').trim();
   if (!biopsyTakenRaw) return 'biopsyTaken';
@@ -13982,6 +14011,18 @@ function getColonNoShowDisplayResult(e) {
   // عمود "حضر موعد المنظار" (e.biopsyDone) — نفس المبدأ لو حضر التحاليل
   // لكن لم يحضر موعد المنظار نفسه.
   if (isRefusedOrNoShowValue(e.biopsyDone)) return t('referredSocialServiceLbl');
+  // عمود "Date OSC" — بملف الدرعية الفعلي يحمل "yes"/"No" نصيًا بدل تاريخ
+  // حقيقي (نفس مبدأ عدم الحضور، انظر الشرح المفصَّل بـcolonIncompleteStep).
+  if (!e.dateOsc) {
+    const dateOscRaw = String(e.dateOscRaw || '').trim();
+    if (dateOscRaw) {
+      const vn = normalizeArabicForMatch(dateOscRaw);
+      const isYes = vn === 'yes' || vn === 'y' || vn === normalizeArabicForMatch('نعم');
+      if (!isYes && (vn === 'no' || vn === 'n' || vn === normalizeArabicForMatch('لا') || isRefusedOrNoShowValue(dateOscRaw))) {
+        return t('referredSocialServiceLbl');
+      }
+    }
+  }
   // عمود "التواصل هاتفيا" — تعذّر الوصول للمريض من الأساس (قبل حتى حجز
   // موعد التحاليل)، فعمود الحضور يضل فاضي منطقيًا — نفس مبدأ عدم الحضور.
   if (!labTestAttendanceRaw.trim() && isNoResponseOrRefusedPhoneContact(e.phoneContactStatus)) return t('referredSocialServiceLbl');
@@ -15485,6 +15526,7 @@ function scanColonPositiveSheet(hospital) {
     const endoscopyNoReason2 = endoscopyNoReasonIdx !== -1 ? String(r[endoscopyNoReasonIdx] ?? '').trim() : '';
     const treatedNoReason = treatedNoReasonIdx !== -1 ? String(r[treatedNoReasonIdx] ?? '').trim() : '';
     const dateOsc = dateOscIdx !== -1 ? parseCellDate(r[dateOscIdx]) : null;
+    const dateOscRaw = dateOscIdx !== -1 ? String(r[dateOscIdx] ?? '').trim() : '';
     const endoscopyDone = endoscopyDoneIdx !== -1 ? String(r[endoscopyDoneIdx] ?? '').trim() : '';
     const endoscopyResult = endoscopyResultIdx !== -1 ? String(r[endoscopyResultIdx] ?? '').trim() : '';
     const biopsyTaken = biopsyTakenIdx !== -1 ? String(r[biopsyTakenIdx] ?? '').trim() : '';
@@ -15511,6 +15553,7 @@ function scanColonPositiveSheet(hospital) {
       endoscopyNoReason2,
       treatedNoReason,
       dateOsc: dateOsc ? dateOsc.toISOString() : null,
+      dateOscRaw,
       biopsyDate: endoscopyDt ? endoscopyDt.toISOString() : null,
       biopsyStatus: !endoscopyDt && endoscopyDone ? endoscopyDone : '',
       biopsyDone: endoscopyDone,
@@ -15664,6 +15707,7 @@ function scanHospitalForNewPositives(moduleKey, hospital) {
       rejectionReason: rejectionReasonIdx !== -1 ? String(r[rejectionReasonIdx] ?? '').trim() : '',
       endoscopyNoReason2: endoscopyNoReasonIdx !== -1 ? String(r[endoscopyNoReasonIdx] ?? '').trim() : '',
       dateOsc: dateOscIdx !== -1 ? (parseCellDate(r[dateOscIdx])?.toISOString() || null) : null,
+      dateOscRaw: dateOscIdx !== -1 ? String(r[dateOscIdx] ?? '').trim() : '',
       biopsyDone: endoscopyDoneIdx !== -1 ? String(r[endoscopyDoneIdx] ?? '').trim() : '',
       biopsyDate: endoscopyDateIdx !== -1 ? (parseCellDate(r[endoscopyDateIdx])?.toISOString() || null) : null,
       endoscopyResult: endoscopyResultIdx !== -1 ? String(r[endoscopyResultIdx] ?? '').trim() : '',
@@ -15883,6 +15927,7 @@ async function fetchColonReferenceSheetDataFromGitHub() {
         endoscopyNoReason2: endoscopyNoReasonIdx !== -1 ? String(r[endoscopyNoReasonIdx] ?? '').trim() : '',
         treatedNoReason: treatedNoReasonIdx !== -1 ? String(r[treatedNoReasonIdx] ?? '').trim() : '',
         dateOsc: dateOscIdx !== -1 ? (parseCellDate(r[dateOscIdx])?.toISOString() || null) : null,
+        dateOscRaw: dateOscIdx !== -1 ? String(r[dateOscIdx] ?? '').trim() : '',
         biopsyDone: endoscopyDoneIdx !== -1 ? String(r[endoscopyDoneIdx] ?? '').trim() : '',
         biopsyDate: endoscopyDateIdx !== -1 ? (parseCellDate(r[endoscopyDateIdx])?.toISOString() || null) : null,
         biopsyStatus: '',
@@ -16089,6 +16134,7 @@ async function fetchColonReferenceSheetData() {
         endoscopyNoReason2: endoscopyNoReasonIdx !== -1 ? String(r[endoscopyNoReasonIdx] ?? '').trim() : '',
         treatedNoReason: treatedNoReasonIdx !== -1 ? String(r[treatedNoReasonIdx] ?? '').trim() : '',
         dateOsc: dateOscIdx !== -1 ? (parseCellDate(r[dateOscIdx])?.toISOString() || null) : null,
+        dateOscRaw: dateOscIdx !== -1 ? String(r[dateOscIdx] ?? '').trim() : '',
         biopsyDone: endoscopyDoneIdx !== -1 ? String(r[endoscopyDoneIdx] ?? '').trim() : '',
         biopsyDate: endoscopyDateIdx !== -1 ? (parseCellDate(r[endoscopyDateIdx])?.toISOString() || null) : null,
         biopsyStatus: '',
@@ -16616,6 +16662,7 @@ async function searchPositiveCasesInReferenceSheet() {
         e.endoscopyNoReason2 = ref.endoscopyNoReason2 || e.endoscopyNoReason2;
         e.treatedNoReason = ref.treatedNoReason || e.treatedNoReason;
         e.dateOsc = ref.dateOsc || e.dateOsc;
+        e.dateOscRaw = ref.dateOscRaw || e.dateOscRaw;
         e.endoscopyResult = ref.endoscopyResult || e.endoscopyResult;
         e.biopsyTaken = ref.biopsyTaken || e.biopsyTaken;
         // This reference file is specifically حالات الدرعية — if the case
@@ -16646,7 +16693,7 @@ async function searchPositiveCasesInReferenceSheet() {
           date: ref.regDate || null, dateEstimated: false,
           loggedAt: new Date().toISOString(), num, age: ref.age,
           ageExcluded: ref.age === null || ref.age === undefined || ref.age < MODULES.colon.ageMin || ref.age > MODULES.colon.ageMax,
-          consentForExam: ref.consentForExam, attendanceReason: ref.attendanceReason, rejectionReason: ref.rejectionReason, endoscopyNoReason2: ref.endoscopyNoReason2, treatedNoReason: ref.treatedNoReason, dateOsc: ref.dateOsc,
+          consentForExam: ref.consentForExam, attendanceReason: ref.attendanceReason, phoneContactStatus: ref.phoneContactStatus, rejectionReason: ref.rejectionReason, endoscopyNoReason2: ref.endoscopyNoReason2, treatedNoReason: ref.treatedNoReason, dateOsc: ref.dateOsc, dateOscRaw: ref.dateOscRaw,
           biopsyDate: ref.biopsyDate, biopsyStatus: ref.biopsyStatus, biopsyDone: ref.biopsyDone,
           endoscopyResult: ref.endoscopyResult, biopsyTaken: ref.biopsyTaken,
           postBiopsyAppointment: ref.postBiopsyAppointment, treatmentPlan: ref.treatmentPlan, notes: ref.notes,
@@ -17646,6 +17693,7 @@ async function loadHospitalFromGitHub(moduleKey, hospital) {
             phoneContactStatus: phoneContactIdx !== -1 ? String(r[phoneContactIdx] ?? '').trim() : '',
             rejectionReason: rejectionReasonIdx !== -1 ? String(r[rejectionReasonIdx] ?? '').trim() : '',
             dateOsc: dateOscIdx !== -1 ? (parseCellDate(r[dateOscIdx])?.toISOString() || null) : null,
+            dateOscRaw: dateOscIdx !== -1 ? String(r[dateOscIdx] ?? '').trim() : '',
             biopsyDone: endoscopyDoneIdx !== -1 ? String(r[endoscopyDoneIdx] ?? '').trim() : '',
             biopsyDate: endoscopyDateIdx !== -1 ? (parseCellDate(r[endoscopyDateIdx])?.toISOString() || null) : null,
             endoscopyResult: endoscopyResultIdx !== -1 ? String(r[endoscopyResultIdx] ?? '').trim() : '',
@@ -18139,6 +18187,7 @@ function scanForHospitalOwnFollowUpSheet(wb, dominantSheetName) {
         attendanceReason: consentIdx !== -1 ? String(r[consentIdx] ?? '').trim() : '',
         phoneContactStatus: phoneContactIdx !== -1 ? String(r[phoneContactIdx] ?? '').trim() : '',
         dateOsc: dateOscIdx !== -1 ? (parseCellDate(r[dateOscIdx])?.toISOString() || null) : null,
+        dateOscRaw: dateOscIdx !== -1 ? String(r[dateOscIdx] ?? '').trim() : '',
         biopsyDone: endoscopyDoneIdx !== -1 ? String(r[endoscopyDoneIdx] ?? '').trim() : '',
         biopsyDate: endoscopyDateIdx !== -1 ? (parseCellDate(r[endoscopyDateIdx])?.toISOString() || null) : null,
         biopsyTaken: biopsyTakenIdx !== -1 ? String(r[biopsyTakenIdx] ?? '').trim() : '',
