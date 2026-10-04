@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.17.0</span>
+  <span id="app-version">الإصدار 8.18.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6966,7 +6966,7 @@ function computeLivePositiveCases(moduleKey, range) {
         const st = reportStateStore.colon[c.hospital];
         const labels = (st?.pending?.headerRow || []).map(h => normalizeLabel(String(h == null ? '' : h)));
         colIdxCache[c.hospital] = {
-          consentIdx: findCol(labels, ['حضر موعد الحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']),
+          consentIdx: findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']),
           rejectionReasonIdx: findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']),
           dateOscIdx: findCol(labels, ['date osc', 'تاريخ osc']),
           endoscopyDoneIdx: findCol(labels, ['is endoscopy procedure has been done', 'endoscopy procedure has been done', 'حضر موعد المنظار', 'تم المنظار', 'هل تم المنظار']),
@@ -13824,6 +13824,17 @@ function colonIncompleteStep(e) {
   if (String(e.rejectionReason || '').includes('تأجيل')) return null; // تأجيل يُغلق أيضًا
   if (!String(e.dateOsc || '').trim()) return 'dateOsc';
   if (!String(e.biopsyDone || '').trim()) return 'endoscopyDone';
+  // حضر موعد التحاليل لكن لم يحضر موعد المنظار (أو رفضه) — عمود "حضر موعد
+  // المنظار" (e.biopsyDone) كان يُعامَل بالغلط كـ"مُجاب عليه" بمجرد وجود أي
+  // نص فيه، فتكمل السلسلة لفحص "تاريخ المنظار" (يكون فاضي دائمًا لعدم
+  // الحضور أصلاً) وتظل الحالة "غير مكتملة" للأبد بدل إغلاقها فورًا — نفس
+  // مبدأ عدم حضور موعد التحاليل بالضبط، يُطبَّق هنا أيضًا. مؤكَّد كحالة
+  // واقعية: 140+ حالة بالدرعية عالقة بسبب هذا بالضبط. مقصود استخدام
+  // isRefusedOrNoShowValue (تطابق عبارات صريحة) لا classifyColonAttendance
+  // (أي قيمة غير "نعم")، لأن هذا العمود بمستشفيات تانية قد يعني "تم إجراء
+  // المنظار فعليًا؟" حيث "لا" الصريحة تعني لسه ما انسوى (بانتظار الإجراء)
+  // وليست رفض/عدم حضور — إغلاقها غلط لو استخدمنا الفحص الأوسع.
+  if (isRefusedOrNoShowValue(e.biopsyDone)) return null;
   if (!String(e.biopsyDate || '').trim()) return 'endoscopyDate';
   const biopsyTakenRaw = String(e.biopsyTaken || '').trim();
   if (!biopsyTakenRaw) return 'biopsyTaken';
@@ -13927,17 +13938,21 @@ function isCaseClosed(e) {
   return false;
 }
 // عرض فقط — لا يغيّر أي بيانات بالملف الأصلي المرفوع/المزامن: حالات
-// القولون اللي عمود "موعد التحاليل" فيها = "لم يحضر" تُغلق فورًا أصلًا
-// (انظر colonIncompleteStep أعلاه)، لكن بطاقة سجل الحالات الإيجابية ما
-// كانت تعرض أي "نتيجة" لها إطلاقًا — فقط الموافقة/سبب الرفض. طُبِّق على
-// كل مستشفيات القولون (مو الدرعية فقط)، لأي حالة لسه ما سُجِّل لها نتيجة
-// فعلية (endoscopyResult/finalDiagnosis) بالملف المصدر — حالة سُجِّلت
-// لها نتيجة حقيقية لاحقًا تُعرض هي، مو هذا النص الافتراضي.
+// القولون اللي أي عمود حضور فيها (موعد التحاليل أو موعد المنظار) = "لم
+// يحضر" تُغلق فورًا أصلًا (انظر colonIncompleteStep أعلاه)، لكن بطاقة سجل
+// الحالات الإيجابية ما كانت تعرض أي "نتيجة" لها إطلاقًا — فقط الموافقة/سبب
+// الرفض. طُبِّق على كل مستشفيات القولون (مو الدرعية فقط)، لأي حالة لسه ما
+// سُجِّل لها نتيجة فعلية (endoscopyResult/finalDiagnosis) بالملف المصدر —
+// حالة سُجِّلت لها نتيجة حقيقية لاحقًا تُعرض هي، مو هذا النص الافتراضي.
 function getColonNoShowDisplayResult(e) {
   if (e.module !== 'colon') return '';
   if (String(e.endoscopyResult || '').trim() || String(e.finalDiagnosis || '').trim()) return '';
-  const attendanceRaw = e.attendanceReason || e.consentForExam || '';
-  return isNoShowValue(attendanceRaw) ? t('referredSocialServiceLbl') : '';
+  const labTestAttendanceRaw = e.attendanceReason || e.consentForExam || '';
+  if (isNoShowValue(labTestAttendanceRaw)) return t('referredSocialServiceLbl');
+  // عمود "حضر موعد المنظار" (e.biopsyDone) — نفس المبدأ لو حضر التحاليل
+  // لكن لم يحضر موعد المنظار نفسه.
+  if (isNoShowValue(e.biopsyDone)) return t('referredSocialServiceLbl');
+  return '';
 }
 // A case counts as CONFIRMED cancer only when the reference sheet's own
 // "Final diagnosis" / "Cancer stage" fields say so — never inferred from
@@ -15334,7 +15349,7 @@ function scanColonPositiveSheet(hospital) {
   // not something specific to any one hospital).
   const timestampIdx     = findCol(labels, ['طابع زمني', 'timestamp']);
   const testResultIdx    = findCol(labels, ['test result', 'result', 'نتيجة الفحص', 'النتيجة']);
-  const consentIdx       = findCol(labels, ['حضر موعد الحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
+  const consentIdx       = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
   const rejectionReasonIdx = findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']);
   const endoscopyNoReasonIdx = findCol(labels, ['what is the reason', 'إذا كانت الإجابة لا', 'في حال لا']);
   const dateOscIdx       = findCol(labels, ['date osc', 'تاريخ osc']);
@@ -15582,7 +15597,7 @@ function scanHospitalForNewPositives(moduleKey, hospital) {
       endoscopyDoneIdx = -1, endoscopyDateIdx = -1, endoscopyResultIdx = -1, biopsyTakenIdx = -1,
       biopsyResultIdx = -1, cancerStageIdx = -1, treatedIdx = -1, treatedNoReasonIdx = -1, treatStartIdx = -1;
   if (moduleKey === 'colon') {
-    consentIdx = findCol(labels, ['حضر موعد الحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
+    consentIdx = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
     rejectionReasonIdx = findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']);
     endoscopyNoReasonIdx = findCol(labels, ['what is the reason', 'إذا كانت الإجابة لا', 'في حال لا']);
     dateOscIdx = findCol(labels, ['date osc', 'تاريخ osc']);
@@ -15787,7 +15802,7 @@ async function fetchColonReferenceSheetDataFromGitHub() {
       'تاريخ استلام العينة', 'تاريخ الفحص', 'تاريخ استلام العينه',
     ]);
     const timestampIdx = findCol(labels, ['طابع زمني', 'timestamp']);
-    const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
+    const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
     const rejectionIdx = findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']);
     const endoscopyNoReasonIdx = findCol(labels, ['what is the reason', 'إذا كانت الإجابة لا', 'في حال لا']);
     const dateOscIdx = findCol(labels, ['date osc', 'تاريخ osc']);
@@ -15982,7 +15997,7 @@ async function fetchColonReferenceSheetData() {
     // implausible year while the form's own submission timestamp for
     // that same row correctly reads the actual current date).
     const timestampIdx = findCol(labels, ['طابع زمني', 'timestamp']);
-    const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
+    const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
     const rejectionIdx = findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']);
     const endoscopyNoReasonIdx = findCol(labels, ['what is the reason', 'إذا كانت الإجابة لا', 'في حال لا']);
     const dateOscIdx = findCol(labels, ['date osc', 'تاريخ osc']);
@@ -17567,7 +17582,7 @@ async function loadHospitalFromGitHub(moduleKey, hospital) {
     if (posConverted.dataRows.length > 0) {
       const labels = posConverted.headerRow.map(h => normalizeLabel(String(h == null ? '' : h)));
       const idIdx = findCol(labels, ['national id', 'id number', 'id', 'رقم الهوية', 'الهوية']);
-      const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
+      const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
       const rejectionReasonIdx = findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']);
       const dateOscIdx = findCol(labels, ['date osc', 'تاريخ osc']);
       const endoscopyDoneIdx = findCol(labels, ['is endoscopy procedure has been done', 'endoscopy procedure has been done', 'حضر موعد المنظار', 'تم المنظار', 'هل تم المنظار']);
@@ -18059,7 +18074,7 @@ function scanForHospitalOwnFollowUpSheet(wb, dominantSheetName) {
     const labels = extracted.headerRow.map(h => normalizeLabel(String(h == null ? '' : h)));
     const idIdx = findCol(labels, ['national id', 'id number', 'id', 'رقم الهوية', 'الهوية']);
     if (idIdx === -1) continue;
-    const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص']);
+    const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص']);
     const dateOscIdx = findCol(labels, ['date osc', 'تاريخ osc']);
     const endoscopyDoneIdx = findCol(labels, ['is endoscopy procedure has been done', 'حضر موعد المنظار', 'تم المنظار']);
     const endoscopyDateIdx = findCol(labels, ['endoscopy date', 'موعد المنظار', 'تاريخ المنظار']);
@@ -18734,7 +18749,7 @@ function collectReportScanRowsForHospitalUncached(name, range, cachedAuditByNum,
   // (as opposed to a no-show or being treated elsewhere, which also
   // exist in the same column but are different reasons).
   const consentColIdx = (!modCfg.isDigitCategory && st.pending.headerRow)
-    ? findCol(st.pending.headerRow.map(normalizeLabel), ['حضر موعد الحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة'])
+    ? findCol(st.pending.headerRow.map(normalizeLabel), ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة'])
     : -1;
   const byNum = new Map();
   const excludedRows = []; // [{hospital, num, rawIdValue, dateText, reason}] — every row that did NOT make it into the final count, for the "تحميل الملاحظات" export
