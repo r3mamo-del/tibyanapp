@@ -2596,6 +2596,8 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
           <div>
             <label class="lbl" data-i18n="clusterTargetBreastMonthly">مستهدف الثدي الشهري</label>
             <input type="number" min="0" id="clusterTargetBreastMonthly" onchange="updateClusterTarget('breast','monthly',this.value)" />
+            <label class="lbl">🎀 مستهدف الثدي — أكتوبر فقط</label>
+            <input type="number" min="0" id="clusterTargetBreastOctober" onchange="updateClusterTarget('breast','october',this.value)" />
           </div>
         </div>
         <div class="grid2" style="gap:10px; margin-top:10px">
@@ -2624,6 +2626,74 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
           <div>
             <label class="lbl" for="afifTargetMonthly" data-i18n="monthlyTargetLbl">المستهدف الشهري</label>
             <input type="number" min="0" id="afifTargetMonthly" onchange="updateAfifOverallTarget('monthly', this.value)" />
+          </div>
+        </div>
+        <label class="lbl">🎀 مستهدفات الثدي — أكتوبر فقط (شهري وأسبوعي)</label>
+        <div class="admin-note">تحل محل المستهدف الشهري العادي عندما تكون الفترة المعروضة شهر أكتوبر فقط، وللثدي فقط. اتركها فارغة لاستخدام المستهدف العادي.</div>
+        <div class="grid2 mb14" style="gap:10px">
+          <div>
+            <label class="lbl" style="font-weight:400">إجمالي عفيف — أكتوبر شهري</label>
+            <input type="number" min="0" id="afifTargetOverallOctober" onchange="updateAfifFacilityTarget('overall','october', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">إجمالي عفيف — أكتوبر أسبوعي</label>
+            <input type="number" min="0" id="afifTargetOverallOctoberWeekly" onchange="updateAfifFacilityTarget('overall','octoberWeekly', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">العيادات — أكتوبر شهري</label>
+            <input type="number" min="0" id="afifTargetClinicOctober" onchange="updateAfifFacilityTarget('clinic','october', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">العيادات — أكتوبر أسبوعي</label>
+            <input type="number" min="0" id="afifTargetClinicOctoberWeekly" onchange="updateAfifFacilityTarget('clinic','octoberWeekly', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">المركز الشرقي — أكتوبر شهري</label>
+            <input type="number" min="0" id="afifTargetCenterEastOctober" onchange="updateAfifFacilityTarget('centerEast','october', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">المركز الشرقي — أكتوبر أسبوعي</label>
+            <input type="number" min="0" id="afifTargetCenterEastOctoberWeekly" onchange="updateAfifFacilityTarget('centerEast','octoberWeekly', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">المركز الغربي — أكتوبر شهري</label>
+            <input type="number" min="0" id="afifTargetCenterWestOctober" onchange="updateAfifFacilityTarget('centerWest','october', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">المركز الغربي — أكتوبر أسبوعي</label>
+            <input type="number" min="0" id="afifTargetCenterWestOctoberWeekly" onchange="updateAfifFacilityTarget('centerWest','octoberWeekly', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">المركز الشمالي — أكتوبر شهري</label>
+            <input type="number" min="0" id="afifTargetCenterNorthOctober" onchange="updateAfifFacilityTarget('centerNorth','october', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">المركز الشمالي — أكتوبر أسبوعي</label>
+            <input type="number" min="0" id="afifTargetCenterNorthOctoberWeekly" onchange="updateAfifFacilityTarget('centerNorth','octoberWeekly', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">مركز السليمانية — أكتوبر شهري</label>
+            <input type="number" min="0" id="afifTargetCenterSulaimaniyahOctober" onchange="updateAfifFacilityTarget('centerSulaimaniyah','october', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">مركز السليمانية — أكتوبر أسبوعي</label>
+            <input type="number" min="0" id="afifTargetCenterSulaimaniyahOctoberWeekly" onchange="updateAfifFacilityTarget('centerSulaimaniyah','octoberWeekly', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">صحة المجتمع — أكتوبر شهري</label>
+            <input type="number" min="0" id="afifTargetCommunityHealthOctober" onchange="updateAfifFacilityTarget('communityHealth','october', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">صحة المجتمع — أكتوبر أسبوعي</label>
+            <input type="number" min="0" id="afifTargetCommunityHealthOctoberWeekly" onchange="updateAfifFacilityTarget('communityHealth','octoberWeekly', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">الأشعة — أكتوبر شهري</label>
+            <input type="number" min="0" id="afifTargetRadiologyOctober" onchange="updateAfifFacilityTarget('radiology','october', this.value)" />
+          </div>
+          <div>
+            <label class="lbl" style="font-weight:400">الأشعة — أكتوبر أسبوعي</label>
+            <input type="number" min="0" id="afifTargetRadiologyOctoberWeekly" onchange="updateAfifFacilityTarget('radiology','octoberWeekly', this.value)" />
           </div>
         </div>
         <label class="lbl" data-i18n="afifTargetHospitalLbl">مستهدف حالات المستشفى</label>
@@ -3360,7 +3430,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.27.0</span>
+  <span id="app-version">الإصدار 8.29.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6606,6 +6676,8 @@ async function loadClusterTargets() {
   const periodSel = document.getElementById('clusterTargetPeriodSelect');
   if (bY) bY.value = clusterTargets.breast.yearly || '';
   if (bM) bM.value = clusterTargets.breast.monthly || '';
+  const bO = document.getElementById('clusterTargetBreastOctober');
+  if (bO) bO.value = clusterTargets.breast.october || '';
   if (cM) cM.value = clusterTargets.colon.monthly || '';
   if (cY) cY.value = clusterTargets.colon.yearly || '';
   if (periodSel) periodSel.value = clusterTargetPeriod;
@@ -6643,8 +6715,15 @@ function clusterTargetRange() {
   if (clusterTargetPeriod === 'year_current') return { from: new Date(y, 0, 1), to: new Date(y, 11, 31, 23, 59, 59) };
   return { from: new Date(y - 1, 0, 1), to: new Date(y - 1, 11, 31, 23, 59, 59) }; // year_previous
 }
+// مستهدفات أكتوبر (للثدي فقط) — تُطبَّق فقط عندما تقع الفترة كاملة داخل شهر أكتوبر.
+function isOctoberRange(range) {
+  if (!range || !range.from || !range.to) return false;
+  const f = new Date(range.from), e = new Date(range.to);
+  return f.getMonth() === 9 && e.getMonth() === 9 && f.getFullYear() === e.getFullYear();
+}
 function clusterTargetValue(moduleKey) {
   const ct = clusterTargets[moduleKey] || { monthly: 0, yearly: 0 };
+  if (moduleKey === 'breast' && clusterTargetPeriod.startsWith('month') && (ct.october || 0) > 0 && isOctoberRange(clusterTargetRange())) return ct.october;
   return clusterTargetPeriod.startsWith('year') ? (ct.yearly || 0) : (ct.monthly || 0);
 }
 // ─── سطر ملخّص شهري بشاشة البوابة (قبل الدخول) ───────────────────────────
@@ -6666,7 +6745,8 @@ function updateGatewayMonthlySummary() {
       // احتساب حصري على مستهدف التجمع الشهري (clusterTargets) — بدون أي
       // بديل احتياطي لمجموع مستهدفات المستشفيات، بناءً على طلب صريح.
       // لو مستهدف التجمع مو محدَّد أصلًا، يبقى صفر بدل رقم مختلف المعنى.
-      const target = (clusterTargets[moduleKey] && clusterTargets[moduleKey].monthly) || 0;
+      let target = (clusterTargets[moduleKey] && clusterTargets[moduleKey].monthly) || 0;
+      if (moduleKey === 'breast' && isOctoberRange(monthRange) && (clusterTargets.breast.october || 0) > 0) target = clusterTargets.breast.october;
       const achievement = computeModuleAchievement(moduleKey, monthRange, 'month');
       const achieved = achievement.totalAchieved;
       const icon = MODULES[moduleKey].icon;
@@ -6794,6 +6874,7 @@ function computeModuleAchievement(moduleKey, range, periodKind) {
         const spanDays = Math.max(1, Math.round((range.to - range.from) / 86400000));
         target = Math.round((st.targetMonthly || 0) * (spanDays / 30));
       }
+      target = afifOctoberOverride(moduleKey, name, range, target, periodKind === 'week' || periodKind === 'week_current' || periodKind === 'week_previous');
       if (!st.pending && !target) return; // nothing to show for this hospital
       let achieved = 0;
       if (st.pending && st.colIdx >= 0) {
@@ -7571,7 +7652,9 @@ function buildFacilityBreakdownHtml(range) {
   // target for "شهر"/"3 أشهر"/custom ranges, measured against that.
   const targetPeriodKey = (indicatorsPeriod === 'week_current' || indicatorsPeriod === 'week_previous') ? 'weekly' : 'monthly';
   const row = (label, n, targetKey) => {
-    const target = targetKey ? ((targets[targetKey] || {})[targetPeriodKey] || 0) : 0;
+    let target = targetKey ? ((targets[targetKey] || {})[targetPeriodKey] || 0) : 0;
+    { const ok = targetPeriodKey === 'weekly' ? 'octoberWeekly' : 'october';
+      if (targetKey && isOctoberRange(range) && ((targets[targetKey] || {})[ok] || 0) > 0) target = targets[targetKey][ok]; }
     const pct = target > 0 ? Math.round((n / target) * 100) : null;
     const color = pct === null ? 'var(--muted)' : (pct < 85 ? '#C81E1E' : (pct <= 95 ? '#B45309' : '#15803D'));
     return `
@@ -18106,7 +18189,16 @@ let afifFacilityTargets = {
   centerEast: { monthly: 0, weekly: 0 }, centerWest: { monthly: 0, weekly: 0 },
   centerSulaimaniyah: { monthly: 0, weekly: 0 }, clinic: { monthly: 0, weekly: 0 },
   radiology: { monthly: 0, weekly: 0 }, communityHealth: { monthly: 0, weekly: 0 },
+  overall: { october: 0 },
 };
+// مستهدف عفيف للثدي بشهر أكتوبر فقط (إجمالي المستشفى)، يستبدل المستهدف الشهري
+// العادي لما تكون الفترة أكتوبر والوحدة ثدي.
+function afifOctoberOverride(moduleKey, name, range, target, weekly) {
+  if (moduleKey !== 'breast' || name !== RESTRICTED_HOSPITAL) return target;
+  const o = (afifFacilityTargets.overall || {})[weekly ? 'octoberWeekly' : 'october'] || 0;
+  if (o > 0 && isOctoberRange(range)) return o;
+  return target;
+}
 function updateAfifOverallTarget(field, value) {
   const key = field === 'weekly' ? 'targetWeekly' : 'targetMonthly';
   updateReportTarget(RESTRICTED_HOSPITAL, key, value);
@@ -18152,10 +18244,18 @@ function populateAfifFacilityTargetCard() {
   const setVal = (idBase, key) => {
     const moEl = document.getElementById(idBase + 'Monthly');
     const wkEl2 = document.getElementById(idBase + 'Weekly');
+    const octEl = document.getElementById(idBase + 'October');
     const t2 = afifFacilityTargets[key] || { monthly: 0, weekly: 0 };
+    if (octEl) octEl.value = t2.october || '';
+    const octW = document.getElementById(idBase + 'OctoberWeekly');
+    if (octW) octW.value = t2.octoberWeekly || '';
     if (moEl) moEl.value = t2.monthly || '';
     if (wkEl2) wkEl2.value = t2.weekly || '';
   };
+  const ovO = document.getElementById('afifTargetOverallOctober');
+  if (ovO) ovO.value = (afifFacilityTargets.overall || {}).october || '';
+  const ovW = document.getElementById('afifTargetOverallOctoberWeekly');
+  if (ovW) ovW.value = (afifFacilityTargets.overall || {}).octoberWeekly || '';
   setVal('afifTargetHospital', 'hospital');
   setVal('afifTargetCenterNorth', 'centerNorth');
   setVal('afifTargetCenterEast', 'centerEast');
@@ -20029,6 +20129,7 @@ function generateReport(autoRefresh, overrideRange) {
       else target = Math.round((st.targetMonthly || 0) * (spanDays / 30));
     }
 
+    target = afifOctoberOverride(currentModule, name, range, target, period === 'week_current' || period === 'week_previous');
     if (!st.pending && !target) return; // nothing to show for this hospital
 
     let achieved = 0, fileRows = 0, outOfPeriod = 0, badDate = 0, positiveCount = 0, birad0Count = 0;
@@ -20246,7 +20347,12 @@ function generateReport(autoRefresh, overrideRange) {
           // selector rather than the separate indicators-page one.
           const reportPeriodVal = document.getElementById('reportPeriod')?.value || '';
           const facTargetKey = (reportPeriodVal === 'week_current' || reportPeriodVal === 'week_previous') ? 'weekly' : 'monthly';
-          const facTarget = key => (afifFacilityTargets[key] || {})[facTargetKey] || 0;
+          const facTarget = key => {
+            const ft = afifFacilityTargets[key] || {};
+            const ok = facTargetKey === 'weekly' ? 'octoberWeekly' : 'october';
+            if ((ft[ok] || 0) > 0 && isOctoberRange(range)) return ft[ok];
+            return ft[facTargetKey] || 0;
+          };
           const facRows = [
             { label: t('afifClinicLbl'), n: fCounts.clinic, target: facTarget('clinic') },
             { label: t('afifCenterEast'), n: fCounts.centerEast, target: facTarget('centerEast') },
