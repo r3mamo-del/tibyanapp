@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.25.0</span>
+  <span id="app-version">الإصدار 8.26.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -13954,7 +13954,8 @@ function breastIncompleteStep(e) {
   }
   if (status === 'rejected') return null; // رفض/عدم حضور/عدم أهلية يُغلق فورًا
   if (status === 'waiting') return 'waitingProcedure'; // بانتظار الإجراء — غير مكتملة بعد
-  if (!String(e.biopsyDate || '').trim()) return 'biopsyDate';
+  // الخزعة تمّت فعليًا — لا نرجع لتاريخ موعد الخزعة (بناءً على طلب صريح):
+  // الناقص الوحيد المطلوب هنا هو نتيجة الخزعة النهائية.
   if (!String(e.finalDiagnosis || '').trim()) return 'finalDiagnosis';
   return null; // كل الخطوات معبأة — الحالة مكتملة
 }
