@@ -3430,7 +3430,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.29.0</span>
+  <span id="app-version">الإصدار 8.30.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6045,6 +6045,8 @@ async function loadReportTargets(moduleKey) {
       if (st[name]) {
         st[name].targetWeekly = saved[name].targetWeekly || 0;
         st[name].targetMonthly = saved[name].targetMonthly || 0;
+        st[name].targetOctWeekly = saved[name].targetOctWeekly || 0;
+        st[name].targetOctMonthly = saved[name].targetOctMonthly || 0;
       }
     });
   } catch (e) {}
@@ -6054,7 +6056,7 @@ async function saveReportTargets(moduleKey) {
     const st = reportStateStore[moduleKey];
     const out = {};
     REPORT_HOSPITALS.forEach(name => {
-      out[name] = { targetWeekly: st[name].targetWeekly || 0, targetMonthly: st[name].targetMonthly || 0 };
+      out[name] = { targetWeekly: st[name].targetWeekly || 0, targetMonthly: st[name].targetMonthly || 0, targetOctWeekly: st[name].targetOctWeekly || 0, targetOctMonthly: st[name].targetOctMonthly || 0 };
     });
     await storageSet(MODULES[moduleKey].settingsKey, JSON.stringify(out));
   } catch (e) {}
@@ -13032,6 +13034,8 @@ function freshHospitalState() {
     ageIdx: -1,
     targetWeekly: 0,
     targetMonthly: 0,
+    targetOctWeekly: 0,   // مستهدف أكتوبر الأسبوعي (ثدي فقط)
+    targetOctMonthly: 0,  // مستهدف أكتوبر الشهري (ثدي فقط)
     fileName: '',
     freshness: null      // {maxDate, rowCount} — used to auto-pick the newer file when duplicates for the same hospital are uploaded
   };
@@ -13127,6 +13131,17 @@ function renderReportHospitalCards() {
           <input type="number" min="0" id="reportTargetM-${i}" placeholder="0" value="${reportState[name].targetMonthly || ''}" onchange="updateReportTarget('${name}', 'targetMonthly', this.value)" />
         </div>
       </div>
+      ${currentModule === 'breast' ? `
+      <div class="grid2" style="margin-top:8px">
+        <div>
+          <label class="lbl" for="reportTargetOW-${i}">🎀 أسبوعي — أكتوبر فقط</label>
+          <input type="number" min="0" id="reportTargetOW-${i}" placeholder="0" value="${reportState[name].targetOctWeekly || ''}" onchange="updateReportTarget('${name}', 'targetOctWeekly', this.value)" />
+        </div>
+        <div>
+          <label class="lbl" for="reportTargetOM-${i}">🎀 شهري — أكتوبر فقط</label>
+          <input type="number" min="0" id="reportTargetOM-${i}" placeholder="0" value="${reportState[name].targetOctMonthly || ''}" onchange="updateReportTarget('${name}', 'targetOctMonthly', this.value)" />
+        </div>
+      </div>` : ''}
 
       </div></div></div>
     </div>
@@ -18194,9 +18209,15 @@ let afifFacilityTargets = {
 // مستهدف عفيف للثدي بشهر أكتوبر فقط (إجمالي المستشفى)، يستبدل المستهدف الشهري
 // العادي لما تكون الفترة أكتوبر والوحدة ثدي.
 function afifOctoberOverride(moduleKey, name, range, target, weekly) {
-  if (moduleKey !== 'breast' || name !== RESTRICTED_HOSPITAL) return target;
+  if (moduleKey !== 'breast') return target;
+  if (!isOctoberRange(range)) return target;
+  // مستهدف أكتوبر لكل مستشفى (حقول تقرير الأداء) — لكل مستشفيات التجمع
+  const st = (reportStateStore.breast || {})[name];
+  const own = st ? (weekly ? st.targetOctWeekly : st.targetOctMonthly) || 0 : 0;
+  if (own > 0) return own;
+  if (name !== RESTRICTED_HOSPITAL) return target;
   const o = (afifFacilityTargets.overall || {})[weekly ? 'octoberWeekly' : 'october'] || 0;
-  if (o > 0 && isOctoberRange(range)) return o;
+  if (o > 0) return o;
   return target;
 }
 function updateAfifOverallTarget(field, value) {
