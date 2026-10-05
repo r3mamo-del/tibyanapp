@@ -3360,7 +3360,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.26.0</span>
+  <span id="app-version">الإصدار 8.27.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -13896,6 +13896,9 @@ function colonIncompleteStep(e) {
   })();
   if (dateOscStatus === 'blank') return 'dateOsc';
   if (dateOscStatus === 'stop') return null; // لم يحضر موعد العيادة (Date OSC) — تُغلق فورًا
+  // Biopsy taken = no/لا → تُغلق فورًا (بناءً على طلب صريح)، حتى لو عمود
+  // "موعد المنظار" (التاريخ) فاضٍ — ما دامت الخزعة لم تُؤخذ فلا إجراء منتظر.
+  if (normalizeConsentValue(e.biopsyTaken) === 'No') return null;
   if (!String(e.biopsyDate || '').trim()) return 'endoscopyDate';
   const biopsyTakenRaw = String(e.biopsyTaken || '').trim();
   if (!biopsyTakenRaw) return 'biopsyTaken';
