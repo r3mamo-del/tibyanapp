@@ -1565,6 +1565,8 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
     body.printing-hub-combined .report-highlights { margin: 2px 0; font-size: 11px; }
     body.printing-hub-combined table.report-table { margin-top: 3px; font-size: 11px; }
     body.printing-hub-combined #printhub-combined-output > div:first-child table.report-table { page-break-inside: avoid; break-inside: avoid; }
+    /* عفيف فقط: تصغير بسيط للصفحة الأولى (تقرير الأداء) عشان سطر اسم المشرف ما ينزل لصفحة ثانية */
+    body.printing-hub-combined #printhub-combined-output.afif-print > div:first-child { zoom: .91; }
     body.printing-hub-combined table.report-table th,
     body.printing-hub-combined table.report-table td { padding: 7px 4px; }
     body.printing-hub-combined table.report-table td { border-bottom: 1px solid var(--border); }
@@ -3430,7 +3432,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.30.0</span>
+  <span id="app-version">الإصدار 8.36.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -6293,6 +6295,7 @@ function printHub5ReportSet() {
     // Strip the leading page-break on the very first section so it
     // doesn't start with a blank page.
     if (container.firstElementChild) container.firstElementChild.style.pageBreakBefore = 'avoid';
+    container.classList.toggle('afif-print', !!afifRestrictedMode);
 
     if (sections.length === 0) {
       hideLoadingOverlay();
@@ -6415,9 +6418,12 @@ function printHub5ReportSet() {
     detailedHiddenEls.forEach(el => el.classList.remove('print-hide'));
 
     // Step 2: السجلات المستبعدة — build (skipPrint=true), capture shared container.
-    try { printReportExcludedRows(true, hubRange); } catch (e) { console.error('printHub5ReportSet step2 (excluded rows) failed', e); }
+    // عفيف فقط: صفحة «ملاحظات التقرير» (السجلات المستبعدة) محذوفة من الطباعة بناءً على طلب صريح.
+    if (!afifRestrictedMode) { try { printReportExcludedRows(true, hubRange); } catch (e) { console.error('printHub5ReportSet step2 (excluded rows) failed', e); } }
     const excludedEl = document.getElementById('report-excluded-print-only');
-    if (excludedEl && excludedEl.innerHTML.trim()) {
+    if (afifRestrictedMode) {
+      // لا شيء — القسم مستبعد
+    } else if (excludedEl && excludedEl.innerHTML.trim()) {
       sections.push(excludedEl.innerHTML);
     } else {
       console.warn('printHub5ReportSet: excluded-records section came back empty — check for an alert modal (e.g. "errPickReportPeriod" or "errNoHospitalWithFileOrTarget") that may have caused an early return inside printReportExcludedRows().');
@@ -6723,6 +6729,19 @@ function isOctoberRange(range) {
   const f = new Date(range.from), e = new Date(range.to);
   return f.getMonth() === 9 && e.getMonth() === 9 && f.getFullYear() === e.getFullYear();
 }
+// مستهدف أكتوبر حسب طول الفترة: فترة قصيرة (≤10 أيام: يوم/أيام/أسبوع) =
+// المستهدف الأسبوعي ÷ 5 أيام عمل (أحد–خميس) × عدد أيام العمل بالفترة،
+// فالأسبوع الكامل = المستهدف الأسبوعي نفسه. فترة أطول = المستهدف الشهري.
+// يرجع fallback لو الفترة خارج أكتوبر أو ما فيه رقم أكتوبر مناسب.
+function octTargetForRange(octWeekly, octMonthly, range, fallback) {
+  if (!isOctoberRange(range)) return fallback;
+  const span = Math.max(1, Math.round((new Date(range.to) - new Date(range.from)) / 86400000) + (new Date(range.to).getHours() === 0 && new Date(range.to).getMinutes() === 0 ? 1 : 0));
+  if (span <= 10) {
+    if (octWeekly > 0) return Math.round(octWeekly / 5 * countWorkDays(new Date(range.from), new Date(range.to)));
+    return fallback;
+  }
+  return octMonthly > 0 ? octMonthly : fallback;
+}
 function clusterTargetValue(moduleKey) {
   const ct = clusterTargets[moduleKey] || { monthly: 0, yearly: 0 };
   if (moduleKey === 'breast' && clusterTargetPeriod.startsWith('month') && (ct.october || 0) > 0 && isOctoberRange(clusterTargetRange())) return ct.october;
@@ -6876,7 +6895,7 @@ function computeModuleAchievement(moduleKey, range, periodKind) {
         const spanDays = Math.max(1, Math.round((range.to - range.from) / 86400000));
         target = Math.round((st.targetMonthly || 0) * (spanDays / 30));
       }
-      target = afifOctoberOverride(moduleKey, name, range, target, periodKind === 'week' || periodKind === 'week_current' || periodKind === 'week_previous');
+      target = afifOctoberOverride(moduleKey, name, range, target);
       if (!st.pending && !target) return; // nothing to show for this hospital
       let achieved = 0;
       if (st.pending && st.colIdx >= 0) {
@@ -7655,8 +7674,7 @@ function buildFacilityBreakdownHtml(range) {
   const targetPeriodKey = (indicatorsPeriod === 'week_current' || indicatorsPeriod === 'week_previous') ? 'weekly' : 'monthly';
   const row = (label, n, targetKey) => {
     let target = targetKey ? ((targets[targetKey] || {})[targetPeriodKey] || 0) : 0;
-    { const ok = targetPeriodKey === 'weekly' ? 'octoberWeekly' : 'october';
-      if (targetKey && isOctoberRange(range) && ((targets[targetKey] || {})[ok] || 0) > 0) target = targets[targetKey][ok]; }
+    if (targetKey) { const ft = targets[targetKey] || {}; target = octTargetForRange(ft.octoberWeekly || 0, ft.october || 0, range, target); }
     const pct = target > 0 ? Math.round((n / target) * 100) : null;
     const color = pct === null ? 'var(--muted)' : (pct < 85 ? '#C81E1E' : (pct <= 95 ? '#B45309' : '#15803D'));
     return `
@@ -13093,6 +13111,13 @@ function renderReportHospitalCards() {
         <span class="hcaret">▾</span>
       </div>
       <div class="hname-body-wrap"><div class="hname-body"><div class="hname-body-inner">
+      ${name === RESTRICTED_HOSPITAL ? `
+      <div style="background:var(--accentSoft); border-radius:10px; padding:10px 12px; margin-bottom:12px">
+        <div style="font-size:12px; font-weight:800; margin-bottom:6px">📊 مصدر تقرير عفيف</div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:4px; cursor:pointer"><input type="radio" name="afif-source" id="afif-source-server" ${afifReportSource === 'server' ? 'checked' : ''} onchange="setAfifReportSource('server')" /> التقرير من السيرفر (الوضع الحالي)</label>
+        <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer"><input type="radio" name="afif-source" id="afif-source-file" ${afifReportSource === 'file' ? 'checked' : ''} onchange="setAfifReportSource('file')" /> التقرير من الملف — يقرأ فقط الحالات من الملف المرفوع</label>
+        <div id="afif-source-msg" style="font-size:11px; color:var(--muted); margin-top:6px"></div>
+      </div>` : ''}
 
       <label class="upload-area" for="reportFile-${i}" style="margin-bottom:10px"
         ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)"
@@ -13353,7 +13378,10 @@ async function clearAllReportFiles() {
     reportState[name].dateContextResolution = undefined;
     reportState[name].secondaryDateContextResolution = undefined;
   });
+  dataGenerationCounter++;
+  try { afifSourceSlots[currentModule].file = null; } catch (e) {} // نسخة ملف عفيف المحفوظة للتبديل بين المصدرين
   renderReportHospitalCards();
+  try { refreshAfifSourceUi(); } catch (e) {}
   const ro = document.getElementById('report-output');
   const dro = document.getElementById('detailed-report-output');
   if (ro) ro.style.display = 'none';
@@ -17749,7 +17777,76 @@ function convertGitHubSheetToPending(sheetInfo) {
 // اللي يشتغل بعد رفع ملف يدوي (handleReportFile) — نفس البنية الداخلية
 // تمامًا (reportState[...].pending، اكتشاف الأعمدة، فحص الحالات
 // الإيجابية)، الفرق الوحيد هو مصدر البيانات نفسه.
+// ─── مصدر تقرير عفيف: 'server' (الافتراضي — من السيرفر/GitHub) أو 'file'
+// (من الملف الذي رفعه المستخدم فقط، ولا تُستبدل بياناته بمزامنة السيرفر) ───
+const AFIF_SOURCE_KEYS = ['pending','fileName','uploadedAt','colIdx','dateIdx','biradIdx','ageIdx','facilityIdx','freshness','positiveSheet','ownFollowUpMap','dateOrderPreference','yearFirstDateOrderPreference','yearFirst2DigitPreference','dateContextResolution','secondaryDateContextResolution','tertiaryDateContextResolution','secondaryDateIdx','tertiaryDateIdx','genderIdx','manualMonthBoundaries'];
+let afifReportSource = 'server';
+try { afifReportSource = localStorage.getItem('raqeeb_afifReportSource_v1') === 'file' ? 'file' : 'server'; } catch (e) {}
+const afifSourceSlots = { breast: { server: null, file: null }, colon: { server: null, file: null } };
+function afifCaptureState(st) { const o = {}; AFIF_SOURCE_KEYS.forEach(k => { o[k] = st[k]; }); return o; }
+function afifApplyState(st, snap) {
+  AFIF_SOURCE_KEYS.forEach(k => { st[k] = snap[k]; });
+  // تُعاد حسابات التواريخ المخزنة مؤقتًا من الصفر لأنها مرتبطة بصفوف الملف
+  st.dateOrderPreference = undefined; st.dateContextResolution = undefined;
+  st.secondaryDateContextResolution = undefined; st.tertiaryDateContextResolution = undefined;
+  st.yearFirst2DigitPreference = undefined;
+}
 async function loadHospitalFromGitHub(moduleKey, hospital) {
+  if (hospital !== RESTRICTED_HOSPITAL) return loadHospitalFromGitHubInner(moduleKey, hospital);
+  const st = reportStateStore[moduleKey][hospital];
+  if (afifReportSource !== 'file') {
+    const r = await loadHospitalFromGitHubInner(moduleKey, hospital);
+    afifSourceSlots[moduleKey].server = afifCaptureState(st);
+    return r;
+  }
+  // وضع الملف: حمّل نسخة السيرفر وخزّنها جانبًا، ثم أرجع ملف المستخدم كما كان
+  const keep = afifCaptureState(st);
+  try {
+    const r = await loadHospitalFromGitHubInner(moduleKey, hospital);
+    afifSourceSlots[moduleKey].server = afifCaptureState(st);
+    return r;
+  } finally {
+    afifApplyState(st, keep);
+    st.dateContextResolution = keep.dateContextResolution; st.dateOrderPreference = keep.dateOrderPreference;
+    dataGenerationCounter++;
+  }
+}
+function setAfifReportSource(mode) {
+  mode = mode === 'file' ? 'file' : 'server';
+  const mk = currentModule;
+  const st = reportStateStore[mk] && reportStateStore[mk][RESTRICTED_HOSPITAL];
+  if (!st) return;
+  const slots = afifSourceSlots[mk];
+  if (mode === afifReportSource) { refreshAfifSourceUi(); return; }
+  slots[afifReportSource] = afifCaptureState(st); // احفظ الحالي بمكانه
+  const target = slots[mode];
+  if (mode === 'file' && !(target && target.pending)) {
+    // لا يوجد ملف مرفوع بعد: نبقي بيانات السيرفر ظاهرة حتى يرفع المستخدم ملفًا
+    afifReportSource = 'file';
+  } else if (target) {
+    afifApplyState(st, target);
+    afifReportSource = mode;
+  } else {
+    afifReportSource = mode;
+  }
+  try { localStorage.setItem('raqeeb_afifReportSource_v1', afifReportSource); } catch (e) {}
+  dataGenerationCounter++; // يبطل نتيجة المسح المخزنة مؤقتًا (إجمالي المحقق الكلي) لأن مصدر البيانات تغيّر
+  refreshAfifSourceUi();
+  try { if (typeof generateReport === 'function' && document.getElementById('report-output') && document.getElementById('report-output').style.display !== 'none' && document.getElementById('report-output').innerHTML.trim()) generateReport(true); } catch (e) {}
+}
+function refreshAfifSourceUi() {
+  const sv = document.getElementById('afif-source-server'), fl = document.getElementById('afif-source-file');
+  if (sv) sv.checked = afifReportSource === 'server';
+  if (fl) fl.checked = afifReportSource === 'file';
+  const msg = document.getElementById('afif-source-msg');
+  if (msg) {
+    const st = (reportStateStore[currentModule] || {})[RESTRICTED_HOSPITAL];
+    msg.textContent = afifReportSource === 'server'
+      ? 'التقرير من بيانات السيرفر (الوضع الحالي).'
+      : (st && st.pending && st.fileName ? 'التقرير من الملف المرفوع فقط: ' + st.fileName + ' — لا تُستبدل بياناته بمزامنة السيرفر.' : 'ارفع ملف عفيف أدناه — سيقرأ التقرير الحالات من هذا الملف فقط.');
+  }
+}
+async function loadHospitalFromGitHubInner(moduleKey, hospital) {
   const data = await fetchGitHubJson(`data/${moduleKey}/${hospital}.json`);
   const dominant = pickDominantSheetFromGitHubData(data.sheets);
   if (!dominant) throw new Error(`ملف ${hospital} فاضي أو بدون بيانات حقيقية`);
@@ -18208,17 +18305,17 @@ let afifFacilityTargets = {
 };
 // مستهدف عفيف للثدي بشهر أكتوبر فقط (إجمالي المستشفى)، يستبدل المستهدف الشهري
 // العادي لما تكون الفترة أكتوبر والوحدة ثدي.
-function afifOctoberOverride(moduleKey, name, range, target, weekly) {
+function afifOctoberOverride(moduleKey, name, range, target) {
   if (moduleKey !== 'breast') return target;
   if (!isOctoberRange(range)) return target;
-  // مستهدف أكتوبر لكل مستشفى (حقول تقرير الأداء) — لكل مستشفيات التجمع
   const st = (reportStateStore.breast || {})[name];
-  const own = st ? (weekly ? st.targetOctWeekly : st.targetOctMonthly) || 0 : 0;
-  if (own > 0) return own;
-  if (name !== RESTRICTED_HOSPITAL) return target;
-  const o = (afifFacilityTargets.overall || {})[weekly ? 'octoberWeekly' : 'october'] || 0;
-  if (o > 0) return o;
-  return target;
+  let w = st ? (st.targetOctWeekly || 0) : 0, m = st ? (st.targetOctMonthly || 0) : 0;
+  if (name === RESTRICTED_HOSPITAL) {
+    const ov = afifFacilityTargets.overall || {};
+    if (!w) w = ov.octoberWeekly || 0;
+    if (!m) m = ov.october || 0;
+  }
+  return octTargetForRange(w, m, range, target);
 }
 function updateAfifOverallTarget(field, value) {
   const key = field === 'weekly' ? 'targetWeekly' : 'targetMonthly';
@@ -18523,6 +18620,7 @@ function handleReportFile(name, input, onDone, rejectOnMismatch) {
         if (!onDone) showAlertModal(t('wrongHospitalFileWarning').replace('{other}', otherHospital).replace('{name}', name));
       }
 
+      dataGenerationCounter++; // ملف جديد مرفوع يدويًا — يبطل الحسابات المخزنة مؤقتًا
       reportState[name].pending    = { headerRow: sheet.headerRow, dataRows: sheet.dataRows, dataRowNumbers: sheet.dataRowNumbers };
       reportState[name].fileName   = file.name;
       reportState[name].uploadedAt = new Date().toISOString();
@@ -18553,6 +18651,10 @@ function handleReportFile(name, input, onDone, rejectOnMismatch) {
         reportState[name].positiveSheet = posSheet;
       } else {
         reportState[name].positiveSheet = null;
+      }
+      if (name === RESTRICTED_HOSPITAL) {
+        // تم رفع ملف يدويًا لعفيف: خزّنه كنسخة "الملف". بوضع "من الملف" يبقى هو المعتمد.
+        try { afifSourceSlots[currentModule].file = afifCaptureState(reportState[name]); setTimeout(refreshAfifSourceUi, 0); } catch (e) {}
       }
       saveReportFileCache(currentModule, name); // internal backup so a page reload doesn't need a fresh Drive pull just to show what's already loaded
 
@@ -20150,7 +20252,7 @@ function generateReport(autoRefresh, overrideRange) {
       else target = Math.round((st.targetMonthly || 0) * (spanDays / 30));
     }
 
-    target = afifOctoberOverride(currentModule, name, range, target, period === 'week_current' || period === 'week_previous');
+    target = afifOctoberOverride(currentModule, name, range, target);
     if (!st.pending && !target) return; // nothing to show for this hospital
 
     let achieved = 0, fileRows = 0, outOfPeriod = 0, badDate = 0, positiveCount = 0, birad0Count = 0;
@@ -20326,6 +20428,7 @@ function generateReport(autoRefresh, overrideRange) {
     hlEl.innerHTML = '';
   }
 
+  let afifFacSum = null; // مجموع صفوف مراكز عفيف (المستهدف = مراكز لها مستهدف، المحقق = كل المراكز بما فيها «أخرى»)
   const rowsHtml = results.map(r => {
     const pct = r.target > 0 ? Math.round((r.achieved / r.target) * 100) : 0;
     const rem = Math.max(0, r.target - r.achieved);
@@ -20370,9 +20473,7 @@ function generateReport(autoRefresh, overrideRange) {
           const facTargetKey = (reportPeriodVal === 'week_current' || reportPeriodVal === 'week_previous') ? 'weekly' : 'monthly';
           const facTarget = key => {
             const ft = afifFacilityTargets[key] || {};
-            const ok = facTargetKey === 'weekly' ? 'octoberWeekly' : 'october';
-            if ((ft[ok] || 0) > 0 && isOctoberRange(range)) return ft[ok];
-            return ft[facTargetKey] || 0;
+            return octTargetForRange(ft.octoberWeekly || 0, ft.october || 0, range, ft[facTargetKey] || 0);
           };
           const facRows = [
             { label: t('afifClinicLbl'), n: fCounts.clinic, target: facTarget('clinic') },
@@ -20384,6 +20485,7 @@ function generateReport(autoRefresh, overrideRange) {
             { label: t('afifCommunityHealth'), n: fCounts.communityHealth, target: facTarget('communityHealth') },
             { label: t('afifRadiologyLbl'), n: fCounts.radiology, target: facTarget('radiology') },
           ];
+          afifFacSum = { rows: facRows, target: facRows.reduce((a, f) => a + (f.target || 0), 0), achieved: facRows.reduce((a, f) => a + (f.n || 0), 0) };
           centerRows = facRows.map(f => {
             const fPct = f.target > 0 ? Math.round((f.n / f.target) * 100) : 0;
             return `
@@ -20402,15 +20504,33 @@ function generateReport(autoRefresh, overrideRange) {
     return mainRow + centerRows;
   }).join('');
 
+  // عفيف: الإجمالي يُحسب من صفوف المراكز — المستهدف = مستهدف عفيف الكلي (الأساس)
+  // أو مجموع مستهدفات المراكز لو لم يُحدد مستهدف كلي، والمحقق = كل
+  // الحالات بجميع المراكز بما فيها التي بلا مستهدف («أخرى» وغيرها).
+  let sumTarget = totalTarget, sumAchieved = totalAchieved, sumRemaining = remaining, sumPct = totalPct;
+  if (afifRestrictedMode && afifFacSum) {
+    sumTarget = totalTarget > 0 ? totalTarget : afifFacSum.target; // مستهدف عفيف الكامل هو الأساس
+    sumAchieved = Math.max(afifFacSum.achieved, totalAchieved);
+    sumRemaining = Math.max(0, sumTarget - sumAchieved);
+    sumPct = sumTarget > 0 ? Math.round((sumAchieved / sumTarget) * 100) : 0;
+    document.getElementById('kpi-target').textContent    = sumTarget;
+    document.getElementById('kpi-achieved').textContent  = sumAchieved;
+    document.getElementById('kpi-remaining').textContent = sumRemaining;
+    // «مراكز حققت الهدف» حسب مستهدف الفترة الفعلي (أسبوعي/شهري/أكتوبر) لا الشهري فقط
+    const withT = afifFacSum.rows.filter(f => f.target > 0);
+    const achTxt = withT.filter(f => (f.n / f.target) * 100 >= 96).length + ' / ' + withT.length;
+    const a1 = document.getElementById('kpi-achievers'), a2 = document.getElementById('kpi-unified-achievers');
+    if (a1) a1.textContent = achTxt; if (a2) a2.textContent = achTxt;
+  }
   document.getElementById('report-table-body').innerHTML = rowsHtml + `
     <tr class="report-total">
       <td>${t('totalRowLbl')}</td>
-      <td>${totalTarget}</td>
-      <td>${totalAchieved}</td>
-      <td>${remaining}</td>
+      <td>${sumTarget}</td>
+      <td>${sumAchieved}</td>
+      <td>${sumRemaining}</td>
       <td>${anyBirad ? totalPositive : '—'}</td>
       ${showBirad0 ? `<td>${totalBirad0}</td>` : ''}
-      <td><span class="pct-cell ${pctClass(totalPct, totalTarget)}">${totalPct}%</span></td>
+      <td><span class="pct-cell ${pctClass(sumPct, sumTarget)}">${sumPct}%</span></td>
     </tr>`;
 
   // Horizontal bar chart — same per-hospital pct data as the table, laid
