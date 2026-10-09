@@ -3432,7 +3432,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.36.0</span>
+  <span id="app-version">الإصدار 8.38.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -13940,7 +13940,11 @@ function classifyColonAttendance(raw) {
 //   4. Endoscopy date
 //   5. Biopsy taken?
 //   6. Biopsy result
-function colonIncompleteStep(e) {
+// يرجع {open:'خطوة ناقصة'} أو {closed:'سبب الإغلاق'} — كل حالة مغلقة لها سبب صريح
+// يُعرض بتقسيم الفئات الأربع (مغلقة بخزعة / مغلقة بسبب / غير مكتملة / لم تتابع).
+function colonChain(e) {
+  // أعلى أولوية: Biopsy taken = نعم تُغلق الحالة فورًا وتُحسب ضمن عدد الخزعات
+  if (normalizeConsentValue(e.biopsyTaken) === 'Yes') return { closed: 'biopsy' };
   const status = classifyColonAttendance(e.consentForExam);
   // Two distinct "genuinely unrecorded anywhere" checks, matching the
   // two different journeys per hospital:
@@ -13957,7 +13961,7 @@ function colonIncompleteStep(e) {
   // otherwise-tracked case.
   if (status === 'blank') {
     if (e.hospital === REFERRAL_HUB_HOSPITAL) {
-      if (lastColonRefSyncAt && e.masterRefMatched === false) return 'notFollowedUp';
+      if (lastColonRefSyncAt && e.masterRefMatched === false) return { open: 'notFollowedUp' };
     } else if (e.notFollowedUpConfirmed) {
       // Only trusted if THIS session actually has that hospital's own
       // follow-up sheet loaded right now — proof the confirmation is
@@ -13968,7 +13972,7 @@ function colonIncompleteStep(e) {
       // that live proof, fall through to the normal chain below instead
       // of asserting something we can no longer actually verify.
       const st = reportStateStore.colon && reportStateStore.colon[e.hospital];
-      if (st && st.ownFollowUpMap) return 'notFollowedUp';
+      if (st && st.ownFollowUpMap) return { open: 'notFollowedUp' };
     }
   }
   // عمود "التواصل هاتفيا" — مرحلة أبكر من موعد التحاليل نفسه: لو ما قدرنا
@@ -13977,11 +13981,11 @@ function colonIncompleteStep(e) {
   // كان يُحسب "لم تُؤخذ الموافقة" (ناقصة) للأبد بدل ما يُغلق، رغم إنه
   // نفس مبدأ عدم الحضور بالضبط. مؤكَّد كحالة واقعية: 16 حالة بالدرعية من
   // أصل الـ35 "consent" العالقة سببها هذا بالضبط.
-  if (status === 'blank' && isNoResponseOrRefusedPhoneContact(e.phoneContactStatus)) return null;
-  if (status === 'blank') return 'consent';
-  if (status === 'stop') return null; // الحالة تُغلق فورًا، ما فيه خطوة ناقصة
-  if (String(e.rejectionReason || '').includes('تأجيل')) return null; // تأجيل يُغلق أيضًا
-  if (!String(e.biopsyDone || '').trim()) return 'endoscopyDone';
+  if (status === 'blank' && isNoResponseOrRefusedPhoneContact(e.phoneContactStatus)) return { closed: 'noContact' };
+  if (status === 'blank') return { open: 'consent' };
+  if (status === 'stop') return { closed: 'noShowTests' }; // الحالة تُغلق فورًا، ما فيه خطوة ناقصة
+  if (String(e.rejectionReason || '').includes('تأجيل')) return { closed: 'postponed' }; // تأجيل يُغلق أيضًا
+  if (!String(e.biopsyDone || '').trim()) return { open: 'endoscopyDone' };
   // حضر موعد التحاليل لكن لم يحضر موعد المنظار (أو رفضه) — عمود "حضر موعد
   // المنظار" (e.biopsyDone) كان يُعامَل بالغلط كـ"مُجاب عليه" بمجرد وجود أي
   // نص فيه، فتكمل السلسلة لفحص "تاريخ المنظار" (يكون فاضي دائمًا لعدم
@@ -13992,7 +13996,7 @@ function colonIncompleteStep(e) {
   // (أي قيمة غير "نعم")، لأن هذا العمود بمستشفيات تانية قد يعني "تم إجراء
   // المنظار فعليًا؟" حيث "لا" الصريحة تعني لسه ما انسوى (بانتظار الإجراء)
   // وليست رفض/عدم حضور — إغلاقها غلط لو استخدمنا الفحص الأوسع.
-  if (isRefusedOrNoShowValue(e.biopsyDone)) return null;
+  if (isRefusedOrNoShowValue(e.biopsyDone)) return { closed: 'noShowEndoscopy' };
   // هذا الفحص (DATE OSC) يأتي بعد فحص "حضر موعد المنظار" مباشرة — وليس
   // قبله كما كان سابقًا — لأن ترتيب الأعمدة الفعلي بملف الدرعية نفسه هو:
   // موعد المنظار ← حضر موعد المنظار ← ... ← Date OSC. لو ظل فحص DATE OSC
@@ -14020,17 +14024,35 @@ function colonIncompleteStep(e) {
     if (vn === 'no' || vn === 'n' || vn === normalizeArabicForMatch('لا') || isRefusedOrNoShowValue(raw)) return 'stop';
     return 'continue'; // نص غير متوقّع — افتراض آمن بأنه محجوز، تفاديًا لإغلاق خاطئ
   })();
-  if (dateOscStatus === 'blank') return 'dateOsc';
-  if (dateOscStatus === 'stop') return null; // لم يحضر موعد العيادة (Date OSC) — تُغلق فورًا
+  if (dateOscStatus === 'blank') return { open: 'dateOsc' };
+  if (dateOscStatus === 'stop') return { closed: 'noShowClinic' }; // لم يحضر موعد العيادة (Date OSC) — تُغلق فورًا
   // Biopsy taken = no/لا → تُغلق فورًا (بناءً على طلب صريح)، حتى لو عمود
   // "موعد المنظار" (التاريخ) فاضٍ — ما دامت الخزعة لم تُؤخذ فلا إجراء منتظر.
-  if (normalizeConsentValue(e.biopsyTaken) === 'No') return null;
-  if (!String(e.biopsyDate || '').trim()) return 'endoscopyDate';
+  if (normalizeConsentValue(e.biopsyTaken) === 'No') return { closed: 'noBiopsy' };
+  if (!String(e.biopsyDate || '').trim()) return { open: 'endoscopyDate' };
   const biopsyTakenRaw = String(e.biopsyTaken || '').trim();
-  if (!biopsyTakenRaw) return 'biopsyTaken';
-  if (normalizeConsentValue(biopsyTakenRaw) === 'Yes' && !String(e.finalDiagnosis || '').trim()) return 'biopsyResult';
-  return null; // كل الخطوات معبأة — الحالة مكتملة
+  if (!biopsyTakenRaw) return { open: 'biopsyTaken' };
+  return { closed: 'other' }; // قيمة غير متوقعة بعمود الخزعة — مغلقة
 }
+function colonIncompleteStep(e) {
+  const r = colonChain(e);
+  return r.open || null;
+}
+// سبب إغلاق حالة القولون (أو null لو مفتوحة)
+function colonClosureCode(e) {
+  const r = colonChain(e);
+  return r.closed || null;
+}
+const COLON_CLOSURE_LABELS = {
+  biopsy: 'تمت الخزعة (Biopsy taken = نعم)',
+  noContact: 'لا رد / رفض التواصل الهاتفي',
+  noShowTests: 'لم يحضر / رفض موعد التحاليل',
+  postponed: 'تأجيل',
+  noShowEndoscopy: 'لم يحضر / رفض موعد المنظار',
+  noShowClinic: 'لم يحضر موعد العيادة',
+  noBiopsy: 'لم تؤخذ خزعة (Biopsy taken = لا)',
+  other: 'أخرى',
+};
 const COLON_INCOMPLETE_STEP_LABELS = {
   notFollowedUp: 'لم تتابع',
   consent: 'لم يتم اخذ التحليل', // عمود "حضر موعد الحاليل" فاضٍ — لم يُسجَّل حضور موعد التحاليل من عدمه
@@ -16708,8 +16730,123 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
       ${kpi(polyp, t('kpiColonPolyp'), 'var(--warn)')}
     </div>`;
     })() : ''}
+    ${currentModule === 'colon' ? buildColonFourCategoriesHtml(cases) : ''}
     ${ageExcludedHtml}
     ${buildPrintBrandFooterHtml()}`;
+}
+// تقسيم حالات القولون لأربع فئات (مجموعها = إجمالي الحالات):
+//  1) مغلقة — Biopsy taken = نعم (تُحسب ضمن الخزعات) + بقية الإغلاقات (تأجيل / لم تؤخذ خزعة / أخرى) مع سبب وعدد كل منها
+//  2) تحت المتابعة — لم تكمل باقي الإجراءات ولم تغلق (مع الخطوة الناقصة وعددها)
+//  3) عدم الاستجابة — لم ترد، أو لم تحضر للعيادة أو للتحليل أو للمنظار
+//  4) لم تتم المتابعة — غير مسجلة بملف المتابعة
+// الضغط على أي فئة يعرض بطاقات حالاتها، مع زر طباعة للبيانات.
+const COLON_CAT_TITLES = { closed: 'مغلقة', follow: 'تحت المتابعة', noresp: 'عدم الاستجابة', notfollowed: 'لم تتم المتابعة' };
+let colonCatStore = { closed: [], follow: [], noresp: [], notfollowed: [] };
+function buildColonFourCategoriesHtml(cases) {
+  const closedCount = {}, openCount = {};
+  colonCatStore = { closed: [], follow: [], noresp: [], notfollowed: [] };
+  const NO_RESPONSE = ['noContact', 'noShowClinic', 'noShowTests', 'noShowEndoscopy'];
+  cases.forEach(e => {
+    const r = colonChain(e);
+    if (r.closed) {
+      closedCount[r.closed] = (closedCount[r.closed] || 0) + 1;
+      (NO_RESPONSE.includes(r.closed) ? colonCatStore.noresp : colonCatStore.closed).push({ e, reason: COLON_CLOSURE_LABELS[r.closed] });
+    } else {
+      openCount[r.open] = (openCount[r.open] || 0) + 1;
+      (r.open === 'notFollowedUp' ? colonCatStore.notfollowed : colonCatStore.follow).push({ e, reason: COLON_INCOMPLETE_STEP_LABELS[r.open] });
+    }
+  });
+  const closedKeys = Object.keys(COLON_CLOSURE_LABELS).filter(k => !NO_RESPONSE.includes(k) && closedCount[k]);
+  const closedN = closedKeys.reduce((a, k) => a + closedCount[k], 0);
+  const noRespKeys = NO_RESPONSE.filter(k => closedCount[k]);
+  const noRespN = noRespKeys.reduce((a, k) => a + closedCount[k], 0);
+  const followKeys = ['consent', 'dateOsc', 'endoscopyDone', 'endoscopyDate', 'biopsyTaken', 'biopsyResult'].filter(k => openCount[k]);
+  const followN = followKeys.reduce((a, k) => a + openCount[k], 0);
+  const notFollowedN = openCount.notFollowedUp || 0;
+  const list = (keys, counts, labels) => keys.length
+    ? `<div style="margin-top:6px; font-size:11px; line-height:1.9">${keys.map(k => `<div style="display:flex; justify-content:space-between; gap:10px; border-top:1px dashed var(--border); padding-top:2px"><span>${esc(labels[k])}</span><b class="ltr-num">${counts[k]}</b></div>`).join('')}</div>`
+    : '';
+  const box = (key, n, color, extra) => `
+    <div onclick="showColonCategoryCards('${key}')" style="cursor:pointer; flex:1 1 220px; border:1.5px solid ${color}; border-radius:12px; padding:10px 12px; background:var(--surface)">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px">
+        <span style="font-weight:800; font-size:12px; color:${color}">${esc(COLON_CAT_TITLES[key])}</span>
+        <span style="font-weight:800; font-size:20px; color:${color}" class="ltr-num">${n}</span>
+      </div>${extra || ''}
+      <div style="font-size:10px; color:var(--accent); margin-top:6px">اضغط لعرض البطاقات ▾</div>
+    </div>`;
+  return `
+    <div style="margin-top:12px">
+      <div style="font-weight:800; font-size:12.5px; margin-bottom:6px">تقسيم الحالات (${cases.length})</div>
+      <div style="display:flex; flex-wrap:wrap; gap:8px">
+        ${box('closed', closedN, 'var(--success)', list(closedKeys, closedCount, COLON_CLOSURE_LABELS) + '<div style="font-size:10px; color:var(--muted); margin-top:4px">الخزعات تُحسب ضمن عدد الخزعات</div>')}
+        ${box('follow', followN, 'var(--warn)', '<div style="font-size:10.5px; color:var(--muted); margin-top:4px">لم تكمل باقي الإجراءات ولم تغلق</div>' + list(followKeys, openCount, COLON_INCOMPLETE_STEP_LABELS))}
+        ${box('noresp', noRespN, 'var(--danger)', '<div style="font-size:10.5px; color:var(--muted); margin-top:4px">لم ترد / لم تحضر للعيادة أو التحليل أو المنظار</div>' + list(noRespKeys, closedCount, COLON_CLOSURE_LABELS))}
+        ${box('notfollowed', notFollowedN, 'var(--muted)', '<div style="font-size:10.5px; color:var(--muted); margin-top:4px">الحالات التي لم تُتابع (غير مسجلة بملف المتابعة)</div>')}
+      </div>
+      <div id="colon-cat-cards" style="margin-top:10px"></div>
+    </div>`;
+}
+let colonCatOpenKey = null;
+function showColonCategoryCards(key) {
+  const box = document.getElementById('colon-cat-cards');
+  if (!box) return;
+  if (colonCatOpenKey === key && box.innerHTML.trim()) { box.innerHTML = ''; colonCatOpenKey = null; return; } // ضغطة ثانية تطوي
+  colonCatOpenKey = key;
+  const items = (colonCatStore[key] || []).slice().sort((a, b) => new Date(b.e.date || b.e.examDate || 0) - new Date(a.e.date || a.e.examDate || 0));
+  const fmt = iso => iso ? fmtDateLocalized(new Date(iso)) : t('notRecorded');
+  const cards = items.map(({ e, reason }) => `
+    <div style="border:1px solid var(--border); border-radius:10px; padding:8px 10px; background:var(--surface)">
+      <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:3px">
+        <b class="ltr-num" style="font-size:12.5px">${esc(e.num)}</b>
+        <span style="font-size:10.5px; color:var(--muted)">${esc(hospitalDisplayName(e.hospital))}</span>
+      </div>
+      <div style="font-size:11px"><b>التسجيل:</b> <span class="ltr-num">${esc(fmt(e.date || e.examDate))}</span></div>
+      <div style="font-size:11px"><b>السبب:</b> ${esc(reason || '—')}</div>
+    </div>`).join('');
+  box.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap">
+      <div style="font-weight:800; font-size:12.5px">${esc(COLON_CAT_TITLES[key])} — ${items.length}</div>
+      <button type="button" class="btn btn-ghost" style="font-size:11.5px" onclick="printColonCategory('${key}')">🖨 طباعة البيانات</button>
+    </div>
+    ${items.length ? `<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px">${cards}</div>` : '<div style="text-align:center; padding:14px; color:var(--muted); font-size:12px">لا توجد حالات</div>'}`;
+}
+function printColonCategory(key) {
+  const items = (colonCatStore[key] || []).slice().sort((a, b) => new Date(a.e.date || a.e.examDate || 0) - new Date(b.e.date || b.e.examDate || 0));
+  if (!items.length) { showAlertModal('لا توجد حالات للطباعة'); return; }
+  const scopeSel = document.getElementById('positive-dashboard-print-scope');
+  const hospitalScope = scopeSel ? scopeSel.value : 'all';
+  const isAllScope = hospitalScope === 'all';
+  const maskId = raw => { const d = String(raw ?? '').replace(/\D/g, ''); return d.length <= 4 ? String(raw ?? '') : '••••••' + d.slice(-4); };
+  const fmt = iso => iso ? fmtDateLocalized(new Date(iso)) : t('notRecorded');
+  const rowsHtml = items.map(({ e, reason }) => `
+    <tr>
+      <td class="ltr-num">${esc(isAllScope ? maskId(e.num) : e.num)}</td>
+      <td>${esc(hospitalDisplayName(e.hospital))}</td>
+      <td class="ltr-num">${fmt(e.date || e.examDate)}</td>
+      <td>${esc(reason || '—')}</td>
+    </tr>`).join('');
+  // ملخص الأسباب بأعلى الطباعة (سبب + عدد)
+  const byReason = {};
+  items.forEach(({ reason }) => { byReason[reason || '—'] = (byReason[reason || '—'] || 0) + 1; });
+  const summary = Object.keys(byReason).map(r => `${esc(r)}: <b>${byReason[r]}</b>`).join(' &nbsp;•&nbsp; ');
+  const titleSuffix = !isAllScope ? ` — ${hospitalDisplayName(hospitalScope)}` : '';
+  const container = document.getElementById('overdue-cases-print-only');
+  container.innerHTML = `
+    ${buildPrintBrandHeaderHtml('حالات القولون — ' + COLON_CAT_TITLES[key] + titleSuffix, fmtDateLocalized(new Date()))}
+    <div style="font-weight:800; font-size:12.5px; margin-bottom:4px">العدد: ${items.length}</div>
+    <div style="font-size:11px; margin-bottom:8px">${summary}</div>
+    <table class="report-table">
+      <thead><tr><th>${t('idNumberLbl')}</th><th>${t('hospitalNameLbl')}</th><th>${t('registrationDateLbl')}</th><th>السبب</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    ${buildPrintBrandFooterHtml()}`;
+  const originalTitle = document.title;
+  document.title = buildSafePrintFilename(['Colon-' + key, asciiModLabel(), new Date().toISOString().slice(0,10)]);
+  document.body.classList.add('printing-overdue-cases');
+  document.body.offsetHeight;
+  window.print();
+  markPrintClassesForCleanup('printing-overdue-cases');
+  setTimeout(() => { document.title = originalTitle; }, 4000);
 }
 
 async function searchPositiveCasesInReferenceSheet() {
