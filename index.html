@@ -1522,6 +1522,17 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
     body.printing-positive #admin-page-positive > .card,
     body.printing-positive #positive-dashboard-card { display: block !important; padding: 0 !important; box-shadow: none !important; border: none !important; }
     body.printing-positive .dr-print-only { display: block !important; }
+    /* لوحة المؤشرات بصفحة واحدة: إخفاء قائمة المستبعدين بالعمر وبطاقات الفئات، وتصغير الجدول */
+    body.printing-positive .print-hide-age,
+    body.printing-positive #colon-cat-cards { display: none !important; }
+    /* كل بيان بصفحة: المؤشرات ثم تقسيم الحالات ثم جدول المستشفيات (كل واحد بصفحة مستقلة) */
+    body.printing-positive #positive-period-summary { display: flex !important; flex-direction: column; }
+    body.printing-positive .po-o1 { order: 1; }
+    body.printing-positive .po-cats { order: 2; break-before: page; page-break-before: always; margin-top: 0 !important; }
+    body.printing-positive .po-hosp { order: 3; break-before: page; page-break-before: always; margin-top: 0 !important; }
+    body.printing-positive .po-o9 { order: 9; }
+    body.printing-positive .colon-hosp-table { font-size: 10px !important; }
+    body.printing-positive .colon-hosp-table th, body.printing-positive .colon-hosp-table td { padding: 2px 4px !important; }
 
     body.printing-hub-combined #module-watermark,
     body.printing-hub-combined #app-footer,
@@ -3432,7 +3443,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.41.0</span>
+  <span id="app-version">الإصدار 8.42.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -16621,7 +16632,7 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
   const ageExcludedCases = positiveLog.filter(e => e.module === currentModule && inRange(e) && e.ageExcluded && matchesScope(e) && (!afifRestrictedMode || e.hospital === RESTRICTED_HOSPITAL));
   const mask = id => id && id.length >= 2 ? '••••••••' + id.slice(-2) : id;
   const ageExcludedHtml = ageExcludedCases.length ? `
-    <div style="margin-top:10px; padding:10px 12px; border:1px solid var(--border); background:var(--accentSoft); border-radius:10px; display:flex; gap:8px; align-items:flex-start">
+    <div class="print-hide-age" style="margin-top:10px; padding:10px 12px; border:1px solid var(--border); background:var(--accentSoft); border-radius:10px; display:flex; gap:8px; align-items:flex-start">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:none; margin-top:1px"><circle cx="9" cy="7" r="3.4"/><path d="M2 20c1-4 3.5-6 7-6s6 2 7 6"/><path d="M17 8l3 3 5-5"/></svg>
       <div>
         <div style="font-weight:700; color:var(--accent); font-size:12.5px; margin-bottom:5px">${t('excludedAgeCasesMsg').replace('{n}', ageExcludedCases.length).replace('{min}', MODULES[currentModule].ageMin).replace('{max}', MODULES[currentModule].ageMax)}</div>
@@ -16664,9 +16675,9 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
         ⚠ ${t('dateNeedsReviewMsg').replace('{n}', needsReview.length)}
       </div>`;
     })()}
-    <div class="bulk-summary">
+    <div class="bulk-summary po-o1">
       ${kpi(s.total, t('kpiTotal'))}
-      ${currentModule === 'colon' ? '</div>' + buildColonFourCategoriesHtml(cases) + buildColonHospitalTableHtml(cases) + '<div class="bulk-summary" style="margin-top:8px">' : kpi(s.closed, t('kpiClosed'))}
+      ${currentModule === 'colon' ? '</div>' + buildColonFourCategoriesHtml(cases) + buildColonHospitalTableHtml(cases) + '<div class="bulk-summary po-o1" style="margin-top:8px">' : kpi(s.closed, t('kpiClosed'))}
       ${currentModule === 'colon' ? '' : kpi(s.total - s.closed, t('kpiIncomplete'), 'var(--danger)')}
       ${kpi(s.within14, `${t('within')} ${BIOPSY_DEADLINE_DAYS[currentModule]} ${t('days')}`)}
       ${kpi(s.pct14 + '%', t('kpiAchievementPct'), ringColorByPct(s.pct14))}
@@ -16726,14 +16737,14 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
         else if (outcome === 'Polyp') polyp++;
       });
       return `
-    <div class="bulk-summary" style="margin-top:8px">
+    <div class="bulk-summary po-o1" style="margin-top:8px">
       ${kpi(cancer, t('kpiColonCancer'), 'var(--danger)')}
       ${kpi(normal, t('kpiColonNormal'), 'var(--success)')}
       ${kpi(polyp, t('kpiColonPolyp'), 'var(--warn)')}
     </div>`;
     })() : ''}
     ${ageExcludedHtml}
-    ${buildPrintBrandFooterHtml()}`;
+    <div class="po-o9">${buildPrintBrandFooterHtml()}</div>`;
 }
 // تقسيم حالات القولون لأربع فئات (مجموعها = إجمالي الحالات):
 //  1) مغلقة — Biopsy taken = نعم (تُحسب ضمن الخزعات) + بقية الإغلاقات (تأجيل / لم تؤخذ خزعة / أخرى) مع سبب وعدد كل منها
@@ -16776,7 +16787,7 @@ function buildColonFourCategoriesHtml(cases) {
       <div style="font-size:10px; color:var(--accent); margin-top:6px">اضغط لعرض البطاقات ▾</div>
     </div>`;
   return `
-    <div style="margin-top:12px">
+    <div class="po-cats" style="margin-top:12px">
       <div style="font-weight:800; font-size:12.5px; margin-bottom:6px">تقسيم الحالات (${cases.length})</div>
       <div style="display:flex; flex-wrap:wrap; gap:8px">
         ${box('closed', closedN, 'var(--success)', list(closedKeys, closedCount, COLON_CLOSURE_LABELS) + '<div style="font-size:10px; color:var(--muted); margin-top:4px">الخزعات تُحسب ضمن عدد الخزعات</div>')}
@@ -16814,9 +16825,9 @@ function buildColonHospitalTableHtml(cases) {
     return `<tr><td>${esc(hospitalDisplayName(h))}${note}</td><td class="ltr-num"><b>${r.total}</b></td><td class="ltr-num">${r.closed}</td><td class="ltr-num">${r.follow}</td><td class="ltr-num">${r.noresp}</td><td class="ltr-num">${r.notfollowed}</td></tr>`;
   }).join('');
   return `
-    <div style="margin-top:12px; overflow-x:auto">
+    <div class="po-hosp" style="margin-top:12px; overflow-x:auto">
       <div style="font-weight:800; font-size:12.5px; margin-bottom:6px">الإيجابيات حسب المستشفى</div>
-      <table style="width:100%; border-collapse:collapse; font-size:11.5px; text-align:center">
+      <table class="colon-hosp-table" style="width:100%; border-collapse:collapse; font-size:11.5px; text-align:center">
         <thead><tr style="background:var(--surface)"><th style="text-align:right; padding:5px">المستشفى</th><th>الإجمالي</th><th>مغلقة</th><th>تحت المتابعة</th><th>عدم الاستجابة</th><th>لم تتم المتابعة</th></tr></thead>
         <tbody>${body}</tbody>
         <tfoot><tr style="font-weight:800; border-top:2px solid var(--border)"><td style="text-align:right; padding:5px">المجموع</td><td class="ltr-num">${sum.total}</td><td class="ltr-num">${sum.closed}</td><td class="ltr-num">${sum.follow}</td><td class="ltr-num">${sum.noresp}</td><td class="ltr-num">${sum.notfollowed}</td></tr></tfoot>
