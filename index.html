@@ -3432,7 +3432,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.38.0</span>
+  <span id="app-version">الإصدار 8.41.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -14255,7 +14255,8 @@ function summarizeCases(cases) {
     return normalizeConsentValue(e.biopsyTaken) === 'Yes' || (e.finalDiagnosis && e.finalDiagnosis.trim());
   }).length;
   const withPlan = cases.filter(e => e.treatmentPlan && e.treatmentPlan.trim()).length;
-  const cancer = cases.filter(isConfirmedCancer).length;
+  // القولون: نفس تصنيف «حالات كانسر» (finalDiagnosis + نتيجة المنظار + المرحلة) عشان الرقمين يتطابقون
+  const cancer = cases.filter(e => e.module === 'colon' ? classifyColonOutcome(e) === 'Cancer' : isConfirmedCancer(e)).length;
   const pct14 = total ? Math.round((within14 / total) * 100) : 0;
   return { total, closed, within14, pct14, withBiopsy, withPlan, cancer };
 }
@@ -14502,6 +14503,7 @@ function printConfirmedCasesList() {
       setTimeout(() => { document.title = originalTitle; }, 4000);
 }
 function classifyColonOutcome(e) {
+  if (isConfirmedCancer(e)) return 'Cancer'; // حالة لها مرحلة (stage) أو تشخيص سرطان
   const text = `${e.finalDiagnosis || ''} ${e.endoscopyResult || ''}`.toLowerCase();
   if (!text.trim()) return null;
   if (/cancer|malignan|carcinoma|adenocarcinoma|سرطان|خبيث/.test(text)) return 'Cancer';
@@ -16664,13 +16666,13 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
     })()}
     <div class="bulk-summary">
       ${kpi(s.total, t('kpiTotal'))}
-      ${kpi(s.closed, t('kpiClosed'))}
-      ${kpi(s.total - s.closed, t('kpiIncomplete'), 'var(--danger)')}
+      ${currentModule === 'colon' ? '</div>' + buildColonFourCategoriesHtml(cases) + buildColonHospitalTableHtml(cases) + '<div class="bulk-summary" style="margin-top:8px">' : kpi(s.closed, t('kpiClosed'))}
+      ${currentModule === 'colon' ? '' : kpi(s.total - s.closed, t('kpiIncomplete'), 'var(--danger)')}
       ${kpi(s.within14, `${t('within')} ${BIOPSY_DEADLINE_DAYS[currentModule]} ${t('days')}`)}
       ${kpi(s.pct14 + '%', t('kpiAchievementPct'), ringColorByPct(s.pct14))}
       ${kpi(s.withBiopsy, t('kpiWithBiopsy'))}
       ${kpi(s.withPlan, t('kpiWithPlan'))}
-      ${kpi(s.cancer, t('kpiCancer'), 'var(--danger)')}
+      ${currentModule === 'colon' ? '' : kpi(s.cancer, t('kpiCancer'), 'var(--danger)')}
       ${currentModule === 'colon' ? kpi(cases.filter(e => isRefusedOrNoShowValue(e.attendanceReason) || isRefusedOrNoShowValue(e.rejectionReason) || isRefusedOrNoShowValue(e.endoscopyNoReason2) || isRefusedOrNoShowValue(e.treatedNoReason) || isRefusedOrNoShowValue(e.endoscopyResult) || isRefusedOrNoShowValue(e.notes) || normalizeConsentValue(e.biopsyDone) === 'No').length, t('kpiRefusedOrNoShow'), 'var(--warn)') : ''}
       ${(() => {
         // تفصيل أسباب الإغلاق للثدي هنا كمان (نفس لوحة المؤشرات بالضبط).
@@ -16730,7 +16732,6 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
       ${kpi(polyp, t('kpiColonPolyp'), 'var(--warn)')}
     </div>`;
     })() : ''}
-    ${currentModule === 'colon' ? buildColonFourCategoriesHtml(cases) : ''}
     ${ageExcludedHtml}
     ${buildPrintBrandFooterHtml()}`;
 }
@@ -16784,6 +16785,42 @@ function buildColonFourCategoriesHtml(cases) {
         ${box('notfollowed', notFollowedN, 'var(--muted)', '<div style="font-size:10.5px; color:var(--muted); margin-top:4px">الحالات التي لم تُتابع (غير مسجلة بملف المتابعة)</div>')}
       </div>
       <div id="colon-cat-cards" style="margin-top:10px"></div>
+    </div>`;
+}
+// جدول مقارنة بين المستشفيات: عدد الإيجابيات وتوزيعها على الفئات الأربع،
+// مع تنبيه للمستشفى الذي ليس له ملف محمّل (فلا يمكن أن تظهر له حالات).
+function buildColonHospitalTableHtml(cases) {
+  const NO_RESPONSE = ['noContact', 'noShowClinic', 'noShowTests', 'noShowEndoscopy'];
+  const rows = {};
+  const get = h => rows[h] || (rows[h] = { total: 0, closed: 0, follow: 0, noresp: 0, notfollowed: 0 });
+  cases.forEach(e => {
+    const r = get(e.hospital || '—');
+    const c = colonChain(e);
+    r.total++;
+    if (c.closed) r[NO_RESPONSE.includes(c.closed) ? 'noresp' : 'closed']++;
+    else r[c.open === 'notFollowedUp' ? 'notfollowed' : 'follow']++;
+  });
+  const store = (reportStateStore.colon) || {};
+  const scopeSel = document.getElementById('positive-dashboard-print-scope');
+  const scope = scopeSel ? scopeSel.value : 'all';
+  const names = (typeof REPORT_HOSPITALS_COLON !== 'undefined' ? REPORT_HOSPITALS_COLON : []).filter(h => scope === 'all' || h === scope);
+  Object.keys(rows).forEach(h => { if (!names.includes(h)) names.push(h); });
+  const sum = { total: 0, closed: 0, follow: 0, noresp: 0, notfollowed: 0 };
+  const body = names.map(h => {
+    const r = rows[h] || { total: 0, closed: 0, follow: 0, noresp: 0, notfollowed: 0 };
+    Object.keys(sum).forEach(k => sum[k] += r[k]);
+    const loaded = !!(store[h] && store[h].pending);
+    const note = loaded ? '' : ' <span style="color:var(--danger); font-size:10px">(لا يوجد ملف محمّل)</span>';
+    return `<tr><td>${esc(hospitalDisplayName(h))}${note}</td><td class="ltr-num"><b>${r.total}</b></td><td class="ltr-num">${r.closed}</td><td class="ltr-num">${r.follow}</td><td class="ltr-num">${r.noresp}</td><td class="ltr-num">${r.notfollowed}</td></tr>`;
+  }).join('');
+  return `
+    <div style="margin-top:12px; overflow-x:auto">
+      <div style="font-weight:800; font-size:12.5px; margin-bottom:6px">الإيجابيات حسب المستشفى</div>
+      <table style="width:100%; border-collapse:collapse; font-size:11.5px; text-align:center">
+        <thead><tr style="background:var(--surface)"><th style="text-align:right; padding:5px">المستشفى</th><th>الإجمالي</th><th>مغلقة</th><th>تحت المتابعة</th><th>عدم الاستجابة</th><th>لم تتم المتابعة</th></tr></thead>
+        <tbody>${body}</tbody>
+        <tfoot><tr style="font-weight:800; border-top:2px solid var(--border)"><td style="text-align:right; padding:5px">المجموع</td><td class="ltr-num">${sum.total}</td><td class="ltr-num">${sum.closed}</td><td class="ltr-num">${sum.follow}</td><td class="ltr-num">${sum.noresp}</td><td class="ltr-num">${sum.notfollowed}</td></tr></tfoot>
+      </table>
     </div>`;
 }
 let colonCatOpenKey = null;
