@@ -1526,11 +1526,16 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
     body.printing-positive .print-hide-age,
     body.printing-positive #colon-cat-cards { display: none !important; }
     /* كل بيان بصفحة: المؤشرات ثم تقسيم الحالات ثم جدول المستشفيات (كل واحد بصفحة مستقلة) */
-    body.printing-positive #positive-period-summary { display: flex !important; flex-direction: column; }
-    body.printing-positive .po-o1 { order: 1; }
-    body.printing-positive .po-cats { order: 2; break-before: page; page-break-before: always; margin-top: 0 !important; }
-    body.printing-positive .po-hosp { order: 3; break-before: page; page-break-before: always; margin-top: 0 !important; }
-    body.printing-positive .po-o9 { order: 9; }
+    body.printing-positive .po-cats { break-before: page; page-break-before: always; margin-top: 0 !important; }
+    body.printing-positive .po-hosp { break-before: page; page-break-before: always; margin-top: 0 !important; }
+    /* الجوال (iOS/Android): أي ارتفاع ثابت أو overflow على الأجداد يقصّ الصفحة — نفكّها كلها عند الطباعة */
+    html:has(body.printing-positive), body.printing-positive { height: auto !important; min-height: 0 !important; overflow: visible !important; }
+    body.printing-positive main, body.printing-positive #panel-admin, body.printing-positive #admin-content,
+    body.printing-positive #admin-page-positive, body.printing-positive #admin-page-positive > .card,
+    body.printing-positive #positive-dashboard-card, body.printing-positive #positive-period-summary,
+    body.printing-positive .card { height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; transform: none !important; }
+    body.printing-positive .po-cats, body.printing-positive .po-hosp, body.printing-positive .bulk-summary { max-width: 100% !important; width: auto !important; }
+    body.printing-positive .colon-hosp-table { width: 100% !important; table-layout: auto; }
     body.printing-positive .colon-hosp-table { font-size: 10px !important; }
     body.printing-positive .colon-hosp-table th, body.printing-positive .colon-hosp-table td { padding: 2px 4px !important; }
 
@@ -3443,7 +3448,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.43.0</span>
+  <span id="app-version">الإصدار 8.43.1</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -16682,7 +16687,7 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
     <div class="bulk-summary po-o1">
       ${kpi(s.total, t('kpiTotal'))}
       ${fs ? kpi(fs.fu, `حالات متابعة (${fs.pctFu}%)`, 'var(--success)') + kpi(fs.nf, `حالات غير متابعة (${fs.pctNf}%)`, 'var(--muted)') : ''}
-      ${currentModule === 'colon' ? '</div>' + buildColonFourCategoriesHtml(cases) + buildColonHospitalTableHtml(cases) + '<div class="bulk-summary po-o1" style="margin-top:8px">' : kpi(s.closed, t('kpiClosed'))}
+      ${currentModule === 'colon' ? '' : kpi(s.closed, t('kpiClosed'))}
       ${currentModule === 'colon' ? '' : kpi(s.total - s.closed, t('kpiIncomplete'), 'var(--danger)')}
       ${kpi(s.within14, `${t('within')} ${BIOPSY_DEADLINE_DAYS[currentModule]} ${t('days')}`)}
       ${kpi(s.pct14 + '%', t('kpiAchievementPct'), ringColorByPct(s.pct14))}
@@ -16748,6 +16753,7 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
       ${kpi(polyp, t('kpiColonPolyp'), 'var(--warn)')}
     </div>`;
     })() : ''}
+    ${currentModule === 'colon' ? buildColonFourCategoriesHtml(cases) + buildColonHospitalTableHtml(cases) : ''}
     ${ageExcludedHtml}
     <div class="po-o9">${buildPrintBrandFooterHtml()}</div>`;
 }
