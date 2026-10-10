@@ -3443,7 +3443,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.42.0</span>
+  <span id="app-version">الإصدار 8.43.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -7172,6 +7172,7 @@ function buildPositiveCasesWindowHtml(moduleKey, range) {
   const { cases } = getUnifiedPositiveCases(moduleKey, range);
   const s = summarizeCases(cases);
   const pctClosed = s.total ? Math.round((s.closed / s.total) * 100) : 0;
+  const fsI = moduleKey === 'colon' ? colonFollowStats(cases) : null;
 
   let extraRow = '';
   if (moduleKey === 'colon') {
@@ -7222,15 +7223,15 @@ function buildPositiveCasesWindowHtml(moduleKey, range) {
       <div class="ind-half-title">${mod.icon} ${esc(displayLabel)}</div>
       <div style="display:flex; justify-content:center; gap:10px; margin-bottom:8px">
         ${donutSvg(s.pct14, { size: 58, stroke: 6, ringColor: ringColorByPct(s.pct14), trackColor: 'var(--border)', textColor: 'var(--text)' })}
-        ${donutSvg(pctClosed, { size: 58, stroke: 6, ringColor: ringColorByPct(pctClosed), trackColor: 'var(--border)', textColor: 'var(--text)' })}
+        ${donutSvg(fsI ? fsI.pctFu : pctClosed, { size: 58, stroke: 6, ringColor: ringColorByPct(fsI ? fsI.pctFu : pctClosed), trackColor: 'var(--border)', textColor: 'var(--text)' })}
       </div>
       <div style="display:flex; justify-content:center; gap:16px; font-size:10px; color:var(--muted); margin-bottom:8px; text-align:center">
         <span>${t('within')} ${BIOPSY_DEADLINE_DAYS[moduleKey]} ${t('days')}</span>
-        <span>${t('closedCasesLbl')}</span>
+        <span>${fsI ? 'حالات متابعة' : t('closedCasesLbl')}</span>
       </div>
       <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:6px">
         ${indKpiBox(s.total, t('totalCasesLbl'))}
-        ${indKpiBox(s.closed, t('closedWord'))}
+        ${fsI ? indKpiBox(fsI.fu + ' (' + fsI.pctFu + '%)', 'حالات متابعة') + indKpiBox(fsI.nf + ' (' + fsI.pctNf + '%)', 'حالات غير متابعة') : indKpiBox(s.closed, t('closedWord'))}
         ${indKpiBox(s.withBiopsy, moduleKey === 'colon' ? t('withEndoscopyLbl') : t('withBiopsyLbl'))}
         ${indKpiBox(s.withPlan, t('withTreatmentPlanLbl'))}
       </div>
@@ -16643,6 +16644,9 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
     </div>` : '';
   const periodLabel = `${fromDt ? fmtDateLocalized(fromDt) : '—'} ${t('toWord')} ${toDt ? fmtDateLocalized(toDt) : '—'}`;
   const pctClosed = s.total ? Math.round((s.closed / s.total) * 100) : 0;
+  const fs = currentModule === 'colon' ? colonFollowStats(cases) : null;
+  const closedOrFollowPct = fs ? fs.pctFu : pctClosed;
+  const closedOrFollowLbl = fs ? 'حالات متابعة' : t('closedCasesLbl');
 
   const kpi = (num, lbl, color) => `
     <div class="stat-box" style="min-width:90px">
@@ -16658,15 +16662,15 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
     <div style="display:flex; align-items:center; gap:20px; border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:12px; background:var(--surface)">
       <div style="display:flex; gap:14px">
         ${donutSvg(s.pct14, { size: 66, stroke: 8, ringColor: ringColorByPct(s.pct14), trackColor: 'var(--border)', textColor: 'var(--text)' })}
-        ${donutSvg(pctClosed, { size: 66, stroke: 8, ringColor: ringColorByPct(pctClosed), trackColor: 'var(--border)', textColor: 'var(--text)' })}
+        ${donutSvg(closedOrFollowPct, { size: 66, stroke: 8, ringColor: ringColorByPct(closedOrFollowPct), trackColor: 'var(--border)', textColor: 'var(--text)' })}
       </div>
       <div style="display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--muted)">
         <div style="display:flex; align-items:center; gap:6px"><span style="width:8px; height:8px; border-radius:50%; background:${ringColorByPct(s.pct14)}"></span>${t('within')} ${BIOPSY_DEADLINE_DAYS[currentModule]} ${t('days')}</div>
-        <div style="display:flex; align-items:center; gap:6px"><span style="width:8px; height:8px; border-radius:50%; background:${ringColorByPct(pctClosed)}"></span>${t('closedCasesLbl')}</div>
+        <div style="display:flex; align-items:center; gap:6px"><span style="width:8px; height:8px; border-radius:50%; background:${ringColorByPct(closedOrFollowPct)}"></span>${closedOrFollowLbl}</div>
       </div>
     </div>
     <div class="dr-print-only" style="text-align:center; font-weight:800; font-size:15px; padding:10px; margin-bottom:12px; border:2px solid var(--accent); border-radius:10px">
-      ${t('within')} ${BIOPSY_DEADLINE_DAYS[currentModule]} ${t('days')}: ${s.pct14}% — ${t('closedCasesLbl')}: ${pctClosed}%
+      ${t('within')} ${BIOPSY_DEADLINE_DAYS[currentModule]} ${t('days')}: ${s.pct14}% — ${closedOrFollowLbl}: ${closedOrFollowPct}%
     </div>
     ${(() => {
       const needsReview = cases.filter(e => e.dateNeedsReview);
@@ -16677,6 +16681,7 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
     })()}
     <div class="bulk-summary po-o1">
       ${kpi(s.total, t('kpiTotal'))}
+      ${fs ? kpi(fs.fu, `حالات متابعة (${fs.pctFu}%)`, 'var(--success)') + kpi(fs.nf, `حالات غير متابعة (${fs.pctNf}%)`, 'var(--muted)') : ''}
       ${currentModule === 'colon' ? '</div>' + buildColonFourCategoriesHtml(cases) + buildColonHospitalTableHtml(cases) + '<div class="bulk-summary po-o1" style="margin-top:8px">' : kpi(s.closed, t('kpiClosed'))}
       ${currentModule === 'colon' ? '' : kpi(s.total - s.closed, t('kpiIncomplete'), 'var(--danger)')}
       ${kpi(s.within14, `${t('within')} ${BIOPSY_DEADLINE_DAYS[currentModule]} ${t('days')}`)}
@@ -16752,6 +16757,13 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
 //  3) عدم الاستجابة — لم ترد، أو لم تحضر للعيادة أو للتحليل أو للمنظار
 //  4) لم تتم المتابعة — غير مسجلة بملف المتابعة
 // الضغط على أي فئة يعرض بطاقات حالاتها، مع زر طباعة للبيانات.
+// القولون: حالات متابعة (مسجلة بملف المتابعة) مقابل غير متابعة (لم تتم متابعتها) مع النسبة
+function colonFollowStats(cases) {
+  const total = cases.length;
+  const nf = cases.filter(e => { const c = colonChain(e); return !c.closed && c.open === 'notFollowedUp'; }).length;
+  const fu = total - nf;
+  return { total, fu, nf, pctFu: total ? Math.round(fu / total * 100) : 0, pctNf: total ? Math.round(nf / total * 100) : 0 };
+}
 const COLON_CAT_TITLES = { closed: 'مغلقة', follow: 'تحت المتابعة', noresp: 'عدم الاستجابة', notfollowed: 'لم تتم المتابعة' };
 let colonCatStore = { closed: [], follow: [], noresp: [], notfollowed: [] };
 function buildColonFourCategoriesHtml(cases) {
