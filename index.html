@@ -1536,6 +1536,12 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
     body.printing-positive .card { height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; transform: none !important; }
     body.printing-positive .po-cats, body.printing-positive .po-hosp, body.printing-positive .bulk-summary { max-width: 100% !important; width: auto !important; }
     body.printing-positive .colon-hosp-table { width: 100% !important; table-layout: auto; }
+    /* مؤشرات اللوحة بصفحة واحدة: 3 أعمدة وبطاقات أصغر، ولا تنقسم أي بطاقة بين صفحتين */
+    body.printing-positive .stat-box { break-inside: avoid; page-break-inside: avoid; }
+    body.printing-positive:not(.printing-positive-afif) .bulk-summary { grid-template-columns: repeat(3, 1fr) !important; gap: 6px !important; margin: 8px 0 !important; }
+    body.printing-positive:not(.printing-positive-afif) .stat-box { padding: 6px 4px !important; }
+    body.printing-positive:not(.printing-positive-afif) .stat-num { font-size: 16px !important; }
+    body.printing-positive:not(.printing-positive-afif) .stat-lbl { font-size: 10px !important; margin-top: 1px !important; }
     body.printing-positive .colon-hosp-table { font-size: 10px !important; }
     body.printing-positive .colon-hosp-table th, body.printing-positive .colon-hosp-table td { padding: 2px 4px !important; }
 
@@ -3448,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.43.1</span>
+  <span id="app-version">الإصدار 8.43.2</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -7236,7 +7242,7 @@ function buildPositiveCasesWindowHtml(moduleKey, range) {
       </div>
       <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:6px">
         ${indKpiBox(s.total, t('totalCasesLbl'))}
-        ${fsI ? indKpiBox(fsI.fu + ' (' + fsI.pctFu + '%)', 'حالات متابعة') + indKpiBox(fsI.nf + ' (' + fsI.pctNf + '%)', 'حالات غير متابعة') : indKpiBox(s.closed, t('closedWord'))}
+        ${fsI ? indKpiBox(fsI.fu + ' (' + fsI.pctFu + '%)', 'حالات متابعة') + indKpiBox(fsI.nf + ' (' + fsI.pctNf + '%)', 'حالات في الانتظار') : indKpiBox(s.closed, t('closedWord'))}
         ${indKpiBox(s.withBiopsy, moduleKey === 'colon' ? t('withEndoscopyLbl') : t('withBiopsyLbl'))}
         ${indKpiBox(s.withPlan, t('withTreatmentPlanLbl'))}
       </div>
@@ -16686,7 +16692,7 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
     })()}
     <div class="bulk-summary po-o1">
       ${kpi(s.total, t('kpiTotal'))}
-      ${fs ? kpi(fs.fu, `حالات متابعة (${fs.pctFu}%)`, 'var(--success)') + kpi(fs.nf, `حالات غير متابعة (${fs.pctNf}%)`, 'var(--muted)') : ''}
+      ${fs ? kpi(fs.fu, `حالات متابعة (${fs.pctFu}%)`, 'var(--success)') + kpi(fs.nf, `حالات في الانتظار (${fs.pctNf}%)`, 'var(--muted)') : ''}
       ${currentModule === 'colon' ? '' : kpi(s.closed, t('kpiClosed'))}
       ${currentModule === 'colon' ? '' : kpi(s.total - s.closed, t('kpiIncomplete'), 'var(--danger)')}
       ${kpi(s.within14, `${t('within')} ${BIOPSY_DEADLINE_DAYS[currentModule]} ${t('days')}`)}
