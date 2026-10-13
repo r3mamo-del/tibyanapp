@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.46.0</span>
+  <span id="app-version">الإصدار 8.46.1</span>
   <button type="button" id="datefix-btn" onclick="showDateFixLog()" style="display:none"></button>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
@@ -5711,6 +5711,28 @@ async function writeSharedStateKeys(patch) {
 // cases this device hasn't pulled down yet, a plain overwrite would
 // silently erase them from the shared file. Same (module,num) merge key
 // and "latest wins" rule used everywhere else in this app.
+// وقت "حداثة" السجل للدمج بين الأجهزة: أحدث من (آخر مزامنة، تصحيح التاريخ)، وإلا تاريخ الفحص.
+function logFreshness(e) {
+  const a = e.lastSyncedAt ? new Date(e.lastSyncedAt).getTime() : 0;
+  const b = e.dateFixedAt ? new Date(e.dateFixedAt).getTime() : 0;
+  const m = Math.max(a, b);
+  return m ? new Date(m) : (e.date ? new Date(e.date) : null);
+}
+// إن كان تاريخ السجل المخزّن هو عكس (يوم↔شهر) التاريخ الحي المصحَّح، يُحدَّث السجل.
+function reconcileSwappedLogDate(existing, dtHere) {
+  try {
+    if (!existing || !existing.date || !dtHere || isNaN(dtHere.getTime())) return false;
+    const e = new Date(existing.date);
+    if (isNaN(e.getTime()) || e.getFullYear() !== dtHere.getFullYear()) return false;
+    if (dtHere.getDate() === dtHere.getMonth() + 1) return false;
+    if (e.getDate() === dtHere.getMonth() + 1 && e.getMonth() + 1 === dtHere.getDate()) {
+      existing.date = dtHere.toISOString();
+      existing.dateFixedAt = new Date().toISOString();
+      return true;
+    }
+  } catch (x) {}
+  return false;
+}
 async function writeSharedPositiveLogMerged() {
   if (!driveAccessToken) return false;
   const run = async () => {
@@ -5725,8 +5747,8 @@ async function writeSharedPositiveLogMerged() {
       const k = keyOf(e);
       const remote = byKey.get(k);
       if (!remote) { byKey.set(k, e); return; }
-      const remoteDt = remote.lastSyncedAt ? new Date(remote.lastSyncedAt) : (remote.date ? new Date(remote.date) : null);
-      const localDt = e.lastSyncedAt ? new Date(e.lastSyncedAt) : (e.date ? new Date(e.date) : null);
+      const remoteDt = logFreshness(remote);
+      const localDt = logFreshness(e);
       if (localDt && (!remoteDt || localDt >= remoteDt)) byKey.set(k, e);
     });
     current.positiveLog = [...byKey.values()];
@@ -13657,8 +13679,8 @@ async function loadPositiveLog() {
       const existing = byKey.get(k);
       if (!existing) { byKey.set(k, e); return; }
       hadDuplicates = true;
-      const existingDt = existing.lastSyncedAt ? new Date(existing.lastSyncedAt) : (existing.date ? new Date(existing.date) : null);
-      const eDt = e.lastSyncedAt ? new Date(e.lastSyncedAt) : (e.date ? new Date(e.date) : null);
+      const existingDt = logFreshness(existing);
+      const eDt = logFreshness(e);
       if (eDt && (!existingDt || eDt > existingDt)) byKey.set(k, e);
     });
     if (hadDuplicates) { positiveLog = [...byKey.values()]; savePositiveLog(); }
@@ -13685,8 +13707,8 @@ async function mergeSharedPositiveLogFromDrive() {
       const k = keyOf(re);
       const local = byKey.get(k);
       if (!local) { byKey.set(k, re); return; }
-      const localDt = local.lastSyncedAt ? new Date(local.lastSyncedAt) : (local.date ? new Date(local.date) : null);
-      const remoteDt = re.lastSyncedAt ? new Date(re.lastSyncedAt) : (re.date ? new Date(re.date) : null);
+      const localDt = logFreshness(local);
+      const remoteDt = logFreshness(re);
       if (remoteDt && (!localDt || remoteDt > localDt)) byKey.set(k, re);
     });
     positiveLog = [...byKey.values()];
@@ -15938,6 +15960,7 @@ function scanHospitalForNewPositives(moduleKey, hospital) {
         // fields that are STILL blank (e.g. this fix landed after the case
         // was first logged, so the columns weren't read the first time).
         let changed = false;
+        try { let dH = st.dateIdx >= 0 ? parseCellDate(r[st.dateIdx]) : null; if (!dH) for (const ix of fallbackDateCols) { const cd = parseCellDate(r[ix]); if (cd) { dH = cd; break; } } if (!dH) { const li = (st.pending.headerRow || []).findIndex(x => /date\s*of\s*lab\s*result|lab\s*result\s*date|تاريخ\s*النتيجة/i.test(String(x == null ? '' : x))); if (li >= 0) dH = parseCellDate(r[li]); } if (reconcileSwappedLogDate(existing, dH)) changed = true; } catch (x) {}
         Object.keys(colonFollowUp).forEach(k => {
           const v = colonFollowUp[k];
           if (v && !existing[k]) { existing[k] = v; changed = true; }
