@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.44.0</span>
+  <span id="app-version">الإصدار 8.44.1</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -18003,7 +18003,8 @@ function fixSwappedDateColumns(headerRow, dataRows, tag) {
         let cur = ts(x.p);
         if (amb(x) && L !== null) {
           const sw = Date.UTC(x.p.y, x.p.d - 1, x.p.m);
-          if (Math.abs(cur - L) / DAY > 45 && Math.abs(sw - L) / DAY <= 10) {
+          const dO = Math.abs(cur - L) / DAY, dS = Math.abs(sw - L) / DAY;
+          if (dO > 14 && dS <= 7 && dS * 3 < dO) {
             let ok = true;
             for (let j = i + 1; j < Math.min(infos.length, i + 41); j++) {
               const w = infos[j];
