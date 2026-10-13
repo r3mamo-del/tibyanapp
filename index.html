@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.44.1</span>
+  <span id="app-version">الإصدار 8.44.2</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -17982,21 +17982,28 @@ function fixSwappedDateColumns(headerRow, dataRows, tag) {
     const LO = Date.UTC(2025, 0, 1), HI = Date.UTC(2027, 0, 1), DAY = 86400000;
     const cols = [];
     headerRow.forEach((h, i) => { if (/date|تاريخ|طابع/i.test(String(h == null ? '' : h))) cols.push(i); });
-    const info = (v) => {
+    const info = (v, mf) => {
       if (v instanceof Date) { const p = dateCellParts(v); return p ? { kind: 'd', p } : null; }
       if (typeof v === 'number') { const p = dateCellParts(v); return p ? { kind: 'd', p } : null; }
       if (typeof v === 'string') {
-        const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        const t = v.trim();
+        let m = t.match(/^(\d{4})-(\d{2})-(\d{2})(?![\d])/);
+        if (m) return { kind: 'i', p: { y: +m[1], m: +m[2], d: +m[3] } };
+        m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\D.*)?$/);
         if (!m) return null;
         const a = +m[1], b = +m[2], y = +m[3];
         if (a > 12 || b > 12) { const mo = b > 12 ? a : b, da = b > 12 ? b : a; return { kind: 's', p: { y, m: mo, d: da } }; }
+        if (mf) return { kind: 'ms', p: { y, m: a, d: b } };
       }
       return null;
     };
     const ts = p => Date.UTC(p.y, p.m - 1, p.d);
-    const amb = x => x.kind === 'd' && x.p.d <= 12 && x.p.d !== x.p.m && ts(x.p) >= LO && ts(x.p) < HI;
+    const amb = x => (x.kind === 'd' || x.kind === 'i' || x.kind === 'ms') && x.p.d <= 12 && x.p.d !== x.p.m && ts(x.p) >= LO && ts(x.p) < HI;
+    const pad = n => (n < 10 ? '0' : '') + n;
     cols.forEach(c => {
-      const infos = dataRows.map(r => info(r[c]));
+      let evMF = false, evDM = false;
+      dataRows.forEach(r => { const v = r[c]; if (typeof v === 'string') { const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/\d{4}/); if (m) { if (+m[2] > 12 && +m[1] <= 12) evMF = true; if (+m[1] > 12 && +m[2] <= 12) evDM = true; } } });
+      const infos = dataRows.map(r => info(r[c], evMF && !evDM));
       let L = null;
       for (let i = 0; i < infos.length; i++) {
         const x = infos[i]; if (!x) continue;
@@ -18014,6 +18021,8 @@ function fixSwappedDateColumns(headerRow, dataRows, tag) {
               const v = dataRows[i][c];
               const np = { y: x.p.y, m: x.p.d, d: x.p.m };
               if (v instanceof Date) dataRows[i][c] = new Date(np.y, np.m - 1, np.d);
+              else if (x.kind === 'i') dataRows[i][c] = v.trim().replace(/^\d{4}-\d{2}-\d{2}/, np.y + '-' + pad(np.m) + '-' + pad(np.d));
+              else if (x.kind === 'ms') dataRows[i][c] = v.trim().replace(/^\d{1,2}\/\d{1,2}\/\d{4}/, np.m + '/' + np.d + '/' + np.y);
               else dataRows[i][c] = Math.round(sw / DAY) + 25569 + (v % 1);
               fixes.push({ row: i, col: c, from: x.p.y + '-' + x.p.m + '-' + x.p.d, to: np.y + '-' + np.m + '-' + np.d });
               cur = sw;
