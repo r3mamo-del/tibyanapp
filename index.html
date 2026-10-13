@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.43.2</span>
+  <span id="app-version">الإصدار 8.44.0</span>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -17970,6 +17970,62 @@ function pickDominantSheetFromGitHubData(sheetsObj) {
 // اللي يعتمد عليها باقي التطبيق بالكامل — بدون إعادة تشغيل منطق اكتشاف
 // صف الهيدر (already منفصل بملف الـJSON نفسه)، بس يستبعد الصفوف الفاضية
 // تمامًا ويحافظ على رقم السطر الحقيقي (يبدأ من 2، لأن صف 1 = الهيدر).
+// تصحيح تلقائي لانعكاس اليوم/الشهر في أعمدة التواريخ (مثل 1 أكتوبر المقروء 10 يناير).
+// يقارن كل تاريخ ملتبس (اليوم ≤ 12) بآخر تاريخ موثوق قبله؛ فإذا كان بعيدًا (> 45 يومًا)
+// وعكسه قريب (≤ 10 أيام) ويؤكده أول تاريخ غير ملتبس بعده، يُعكس. يعدّل الصفوف في مكانها
+// ويرجع قائمة التصحيحات للمراجعة. آمن للتكرار (لا يغيّر بيانات مصححة سابقًا).
+const DATE_SWAP_LOG = [];
+function fixSwappedDateColumns(headerRow, dataRows, tag) {
+  const fixes = [];
+  try {
+    if (!headerRow || !dataRows || !dataRows.length) return fixes;
+    const LO = Date.UTC(2025, 0, 1), HI = Date.UTC(2027, 0, 1), DAY = 86400000;
+    const cols = [];
+    headerRow.forEach((h, i) => { if (/date|تاريخ|طابع/i.test(String(h == null ? '' : h))) cols.push(i); });
+    const info = (v) => {
+      if (v instanceof Date) { const p = dateCellParts(v); return p ? { kind: 'd', p } : null; }
+      if (typeof v === 'number') { const p = dateCellParts(v); return p ? { kind: 'd', p } : null; }
+      if (typeof v === 'string') {
+        const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (!m) return null;
+        const a = +m[1], b = +m[2], y = +m[3];
+        if (a > 12 || b > 12) { const mo = b > 12 ? a : b, da = b > 12 ? b : a; return { kind: 's', p: { y, m: mo, d: da } }; }
+      }
+      return null;
+    };
+    const ts = p => Date.UTC(p.y, p.m - 1, p.d);
+    const amb = x => x.kind === 'd' && x.p.d <= 12 && x.p.d !== x.p.m && ts(x.p) >= LO && ts(x.p) < HI;
+    cols.forEach(c => {
+      const infos = dataRows.map(r => info(r[c]));
+      let L = null;
+      for (let i = 0; i < infos.length; i++) {
+        const x = infos[i]; if (!x) continue;
+        let cur = ts(x.p);
+        if (amb(x) && L !== null) {
+          const sw = Date.UTC(x.p.y, x.p.d - 1, x.p.m);
+          if (Math.abs(cur - L) / DAY > 45 && Math.abs(sw - L) / DAY <= 10) {
+            let ok = true;
+            for (let j = i + 1; j < Math.min(infos.length, i + 41); j++) {
+              const w = infos[j];
+              if (w && !amb(w) && ts(w.p) >= LO && ts(w.p) < HI) { ok = Math.abs(ts(w.p) - sw) / DAY <= 45; break; }
+            }
+            if (ok) {
+              const v = dataRows[i][c];
+              const np = { y: x.p.y, m: x.p.d, d: x.p.m };
+              if (v instanceof Date) dataRows[i][c] = new Date(np.y, np.m - 1, np.d);
+              else dataRows[i][c] = Math.round(sw / DAY) + 25569 + (v % 1);
+              fixes.push({ row: i, col: c, from: x.p.y + '-' + x.p.m + '-' + x.p.d, to: np.y + '-' + np.m + '-' + np.d });
+              cur = sw;
+            }
+          }
+        }
+        if (cur >= LO && cur < HI) L = cur;
+      }
+    });
+    if (fixes.length) DATE_SWAP_LOG.push({ tag: tag || '', n: fixes.length, fixes });
+  } catch (e) { /* التصحيح تحسين فقط */ }
+  return fixes;
+}
 function convertGitHubSheetToPending(sheetInfo) {
   const dataRows = [];
   const dataRowNumbers = [];
@@ -17979,6 +18035,7 @@ function convertGitHubSheetToPending(sheetInfo) {
       dataRowNumbers.push(i + 2); // صف 1 = الهيدر بالملف الأصلي
     }
   });
+  fixSwappedDateColumns(sheetInfo.header || [], dataRows, 'github');
   return { headerRow: sheetInfo.header || [], dataRows, dataRowNumbers };
 }
 
@@ -18830,6 +18887,7 @@ function handleReportFile(name, input, onDone, rejectOnMismatch) {
       }
 
       dataGenerationCounter++; // ملف جديد مرفوع يدويًا — يبطل الحسابات المخزنة مؤقتًا
+      fixSwappedDateColumns(sheet.headerRow, sheet.dataRows, name);
       reportState[name].pending    = { headerRow: sheet.headerRow, dataRows: sheet.dataRows, dataRowNumbers: sheet.dataRowNumbers };
       reportState[name].fileName   = file.name;
       reportState[name].uploadedAt = new Date().toISOString();
@@ -22664,6 +22722,7 @@ async function restoreReportFileCaches() {
         if (!payload || !payload.pending) continue;
         const st = reportStateStore[moduleKey][hospital];
         st.pending = payload.pending;
+        try { fixSwappedDateColumns(st.pending.headerRow, st.pending.dataRows, 'cache'); } catch (e) {}
         st.fileName = payload.fileName || '';
         st.freshness = payload.freshness || null;
         // JSON round-trip turns maxDate (a Date at save time) into a
