@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.46.2</span>
+  <span id="app-version">الإصدار 8.46.3</span>
   <button type="button" id="datefix-btn" onclick="showDateFixLog()" style="display:none"></button>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
@@ -18003,7 +18003,7 @@ function fixSwappedDateColumns(headerRow, dataRows, tag) {
   const fixes = [];
   try {
     if (!headerRow || !dataRows || !dataRows.length) return fixes;
-    const LO = Date.UTC(2025, 0, 1), HI = Date.UTC(2027, 0, 1), DAY = 86400000;
+    const LO = Date.UTC(2026, 0, 1), HI = Date.UTC(2027, 0, 1), DAY = 86400000;
     const cols = [];
     headerRow.forEach((h, i) => { if (/date|تاريخ|طابع/i.test(String(h == null ? '' : h))) cols.push(i); });
     const info = (v, mode) => {
@@ -18041,10 +18041,12 @@ function fixSwappedDateColumns(headerRow, dataRows, tag) {
           const sw = Date.UTC(x.p.y, x.p.d - 1, x.p.m);
           const dO = Math.abs(cur - L) / DAY, dS = Math.abs(sw - L) / DAY;
           if (dO > 14 && ((dS <= 7 && dS * 3 < dO) || (dO > 60 && dS <= 21 && dS * 5 < dO))) {
+            // تأكيد من الأمام: يجب أن يكون العكس أقرب من الأصل إلى أول تاريخ غير ملتبس لاحق
+            // (يمنع قلب قفزة حقيقية مثل 1 فبراير بعد 2 يناير). 
             let ok = true;
-            for (let j = i + 1; j < Math.min(infos.length, i + 41); j++) {
+            for (let j = i + 1; j < Math.min(infos.length, i + 151); j++) {
               const w = infos[j];
-              if (w && !amb(w) && ts(w.p) >= LO && ts(w.p) < HI) { ok = Math.abs(ts(w.p) - sw) / DAY <= 45; break; }
+              if (w && !amb(w) && ts(w.p) >= LO && ts(w.p) < HI) { ok = Math.abs(ts(w.p) - sw) < Math.abs(ts(w.p) - cur) && Math.abs(ts(w.p) - sw) / DAY <= 45; break; }
             }
             if (ok) {
               const v = dataRows[i][c];
