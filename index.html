@@ -3454,7 +3454,8 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.44.2</span>
+  <span id="app-version">الإصدار 8.46.0</span>
+  <button type="button" id="datefix-btn" onclick="showDateFixLog()" style="display:none"></button>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
 
@@ -18032,9 +18033,29 @@ function fixSwappedDateColumns(headerRow, dataRows, tag) {
         if (cur >= LO && cur < HI) L = cur;
       }
     });
-    if (fixes.length) DATE_SWAP_LOG.push({ tag: tag || '', n: fixes.length, fixes });
+    if (fixes.length) { DATE_SWAP_LOG.push({ tag: tag || '', n: fixes.length, fixes }); try { refreshDateFixBadge(); } catch (e) {} }
   } catch (e) { /* التصحيح تحسين فقط */ }
   return fixes;
+}
+function refreshDateFixBadge() {
+  const b = document.getElementById('datefix-btn'); if (!b) return;
+  const n = DATE_SWAP_LOG.reduce((a, x) => a + x.n, 0);
+  b.style.display = n ? '' : 'none';
+  b.textContent = '🛠 تصحيح التواريخ (' + n + ')';
+}
+function showDateFixLog() {
+  const by = {};
+  DATE_SWAP_LOG.forEach(x => { by[x.tag] = (by[x.tag] || []).concat(x.fixes); });
+  let h = '<div style="font-size:13px;line-height:1.7">تم تصحيح تواريخ مقلوبة (اليوم↔الشهر) تلقائيًا بمقارنتها بالصفوف المجاورة. راجع العيّنات للتأكد؛ الرقم هو رقم الصف في الملف.</div>';
+  Object.keys(by).forEach(k => {
+    const f = by[k];
+    h += '<h4 style="margin:12px 0 4px">' + (k || '-') + ' — ' + f.length + ' تصحيح</h4><table style="width:100%;font-size:12px;border-collapse:collapse" dir="ltr"><tr><th>صف</th><th>من</th><th>إلى</th></tr>';
+    const seen = {};
+    f.forEach(z => { const key = z.from + '>' + z.to; if (!seen[key]) seen[key] = { first: z.row + 2, n: 0, from: z.from, to: z.to }; seen[key].n++; });
+    Object.values(seen).slice(0, 40).forEach(z => { h += '<tr><td>' + z.first + (z.n > 1 ? ' (×' + z.n + ')' : '') + '</td><td>' + z.from + '</td><td>' + z.to + '</td></tr>'; });
+    h += '</table>';
+  });
+  showInfoModal('سجل تصحيح التواريخ', h, 'warn');
 }
 function convertGitHubSheetToPending(sheetInfo) {
   const dataRows = [];
