@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.46.3</span>
+  <span id="app-version">الإصدار 8.47.0</span>
   <button type="button" id="datefix-btn" onclick="showDateFixLog()" style="display:none"></button>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
@@ -18023,6 +18023,7 @@ function fixSwappedDateColumns(headerRow, dataRows, tag) {
         if (a > 12 || b > 12) { const mo = b > 12 ? a : b, da = b > 12 ? b : a; return { kind: 's', p: { y, m: mo, d: da } }; }
         if (mode === 'mf') return { kind: 'ms', p: { y, m: a, d: b } };
         if (mode === 'df') return { kind: 'ds', p: { y, m: b, d: a } };
+        if (mode === 'mx') return { kind: 'xs', p: { y, m: a, d: b }, a, b, y };
       }
       return null;
     };
@@ -18032,10 +18033,34 @@ function fixSwappedDateColumns(headerRow, dataRows, tag) {
     cols.forEach(c => {
       let evMF = false, evDM = false;
       dataRows.forEach(r => { const v = r[c]; if (typeof v === 'string') { const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/\d{4}/); if (m) { if (+m[2] > 12 && +m[1] <= 12) evMF = true; if (+m[1] > 12 && +m[2] <= 12) evDM = true; } } });
-      const infos = dataRows.map(r => info(r[c], evMF && !evDM ? 'mf' : (evDM && !evMF ? 'df' : null)));
+      const infos = dataRows.map(r => info(r[c], evMF && !evDM ? 'mf' : (evDM && !evMF ? 'df' : (evMF && evDM ? 'mx' : null))));
       let L = null;
       for (let i = 0; i < infos.length; i++) {
         const x = infos[i]; if (!x) continue;
+        if (x.kind === 'xs') {
+          // عمود نصي مختلط (شهر/يوم ويوم/شهر معًا): نختار القراءة الأقرب لآخر تاريخ موثوق، ونخزّنها رقمًا تسلسليًا غير ملتبس
+          if (L === null) continue;
+          const r1 = Date.UTC(x.y, x.a - 1, x.b), r2 = Date.UTC(x.y, x.b - 1, x.a);
+          const d1 = Math.abs(r1 - L) / DAY, d2 = Math.abs(r2 - L) / DAY;
+          let pick = null;
+          if (d1 <= 21 && d2 > 3 * d1) pick = r1; else if (d2 <= 21 && d1 > 3 * d2) pick = r2;
+          if (pick !== null) {
+            const other = pick === r1 ? r2 : r1;
+            for (let j = i + 1; j < Math.min(infos.length, i + 151); j++) {
+              const w = infos[j];
+              if (w && w.kind !== 'xs' && !amb(w) && ts(w.p) >= LO && ts(w.p) < HI) { if (!(Math.abs(ts(w.p) - pick) < Math.abs(ts(w.p) - other))) pick = null; break; }
+            }
+          }
+          if (pick !== null && pick >= LO && pick < HI) {
+            const old = parseCellDate(dataRows[i][c]), pd = new Date(pick);
+            dataRows[i][c] = Math.round(pick / DAY) + 25569;
+            if (!old || old.getFullYear() !== pd.getUTCFullYear() || old.getMonth() !== pd.getUTCMonth() || old.getDate() !== pd.getUTCDate()) {
+              fixes.push({ row: i, col: c, from: old ? old.getFullYear() + '-' + (old.getMonth() + 1) + '-' + old.getDate() : x.y + '-' + x.a + '-' + x.b, to: pd.getUTCFullYear() + '-' + (pd.getUTCMonth() + 1) + '-' + pd.getUTCDate() });
+            }
+            L = pick;
+          }
+          continue;
+        }
         let cur = ts(x.p);
         if (amb(x) && L !== null) {
           const sw = Date.UTC(x.p.y, x.p.d - 1, x.p.m);
