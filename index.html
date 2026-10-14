@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.47.0</span>
+  <span id="app-version">الإصدار 8.48.2</span>
   <button type="button" id="datefix-btn" onclick="showDateFixLog()" style="display:none"></button>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
@@ -7155,7 +7155,7 @@ function computeLivePositiveCases(moduleKey, range) {
       // sources above, never overwrites anything already resolved live.
       const stored = positiveLog.find(e => e.module === 'colon' && e.num === c.num);
       if (stored) {
-        ['consentForExam','attendanceReason','phoneContactStatus','rejectionReason','dateOsc','dateOscRaw','biopsyDone','biopsyDate',
+        ['consentForExam','attendanceReason','phoneContactStatus','rejectionReason','dateOsc','dateOscRaw','labApptDate','biopsyDone','biopsyDate',
          'endoscopyResult','biopsyTaken','finalDiagnosis','cancerStage','treatmentPlan','notes'].forEach(k => {
           if (stored[k] && !c[k]) c[k] = stored[k];
         });
@@ -13027,6 +13027,34 @@ function isPlausibleExamDate(iso) {
 // present and plausible. An implausible date is shown to the user but
 // excluded from the 14-day calculation so a typo like "2028" can't make
 // the countdown wildly wrong.
+// تاريخ بداية مهلة الـ28 يومًا للقولون: تاريخ التحليل/موعد التحاليل من الملف
+// المرجعي (الدرعية: عمود "موعد التحاليل" = O، الدوادمي: DATE OSC)،
+// وإلا يرجع لتاريخ الفحص المعتاد.
+function deadlineStartDate(e) {
+  if (e && e.module === 'colon' && e.labApptDate && isPlausibleExamDate(e.labApptDate)) {
+    const d = new Date(e.labApptDate);
+    const bio = e.biopsyDate ? new Date(e.biopsyDate) : null;
+    // موعد التحاليل لا يمكن أن يأتي بعد المنظار: لو حصل فالتاريخ غالبًا
+    // مقلوب (يوم/شهر) بالملف المرجعي — نجرّب القلب، وإن لم يستقم نتجاهله.
+    if (bio && !isNaN(bio) && d > bio) {
+      if (d.getDate() <= 12 && d.getDate() !== d.getMonth() + 1) {
+        const sw = new Date(d.getFullYear(), d.getDate() - 1, d.getMonth() + 1);
+        if (sw <= bio && (bio - sw) / 86400000 <= 120) return sw.toISOString();
+      }
+      return usableExamDate(e);
+    }
+    return e.labApptDate;
+  }
+  return usableExamDate(e);
+}
+function findLabApptDateIdx(labels, consentIdx) {
+  const hints = ['موعد التحاليل', 'موعد الحاليل', 'تاريخ التحاليل', 'تاريخ التحليل', 'تاريخ موعد التحاليل'].map(normalizeLabel);
+  for (const h of hints) {
+    const i = labels.findIndex((l, ix) => ix !== consentIdx && l.includes(h) && !l.includes(normalizeLabel('حضر')));
+    if (i !== -1) return i;
+  }
+  return consentIdx === 15 ? 14 : -1; // العمود O (قبل P = حضر موعد الحاليل)
+}
 function usableExamDate(e) {
   if (e.date && isPlausibleExamDate(e.date)) return e.date;
   if (e.examDate && isPlausibleExamDate(e.examDate)) return e.examDate;
@@ -13829,7 +13857,7 @@ async function clearPositiveLog() {
 // Days elapsed between the registration date and a given reference date
 // (or today if none given) — whole days, ignoring time-of-day.
 function daysSinceRegistration(e, refIso) {
-  const startDate = usableExamDate(e);
+  const startDate = deadlineStartDate(e);
   if (!startDate) return null;
   const start = new Date(startDate); start.setHours(0,0,0,0);
   const ref = refIso ? new Date(refIso) : new Date();
@@ -14666,7 +14694,7 @@ function exportPositiveCombinedExcel() {
 
 function computeCaseStatus(e) {
   const deadline = BIOPSY_DEADLINE_DAYS[e.module];
-  if (!deadline || !usableExamDate(e)) return null;
+  if (!deadline || !deadlineStartDate(e)) return null;
   if (e.biopsyDate) {
     const daysToBiopsy = daysSinceRegistration(e, e.biopsyDate);
     return daysToBiopsy <= deadline ? 'green' : 'red'; // registered, but too late — still a real delay
@@ -15020,8 +15048,9 @@ function renderPositiveLog() {
     // تاريخ الفحص، مع تحذير أحمر لو تجاوز مهلة الـ28 يوم.
     let colonDatesBlock = '';
     if (e.module === 'colon') {
-      const gapDays = (rawExamDate && isPlausibleExamDate(rawExamDate) && e.biopsyDate)
-        ? Math.round((new Date(e.biopsyDate) - new Date(rawExamDate)) / 86400000) : null;
+      const gapStart = deadlineStartDate(e);
+      const gapDays = (gapStart && e.biopsyDate)
+        ? Math.round((new Date(e.biopsyDate) - new Date(gapStart)) / 86400000) : null;
       const gapOver = gapDays != null && gapDays > BIOPSY_DEADLINE_DAYS.colon;
       colonDatesBlock = `
         ${row('DATE OSC', e.dateOsc ? fmt(e.dateOsc) : null)}
@@ -15768,6 +15797,8 @@ function scanColonPositiveSheet(hospital) {
       treatedNoReason,
       dateOsc: dateOsc ? dateOsc.toISOString() : null,
       dateOscRaw,
+      // الدوادمي: بداية مهلة الـ28 يومًا = DATE OSC (وإلا يرجع لتاريخ الفحص)
+      ...(hospital === 'الدوادمي' ? { labApptDate: (dateOsc && isPlausibleExamDate(dateOsc.toISOString())) ? dateOsc.toISOString() : null } : {}),
       biopsyDate: endoscopyDt ? endoscopyDt.toISOString() : null,
       biopsyStatus: !endoscopyDt && endoscopyDone ? endoscopyDone : '',
       biopsyDone: endoscopyDone,
@@ -16100,6 +16131,7 @@ async function fetchColonReferenceSheetDataFromGitHub() {
     ]);
     const timestampIdx = findCol(labels, ['طابع زمني', 'timestamp']);
     const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
+    const labApptIdx = findLabApptDateIdx(labels, consentIdx);
     const phoneContactIdx = findCol(labels, ['التواصل هاتفيا', 'التواصل هاتفياً', 'phone contact', 'تم التواصل']);
     const rejectionIdx = findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']);
     const endoscopyNoReasonIdx = findCol(labels, ['what is the reason', 'إذا كانت الإجابة لا', 'في حال لا']);
@@ -16143,6 +16175,7 @@ async function fetchColonReferenceSheetDataFromGitHub() {
         treatedNoReason: treatedNoReasonIdx !== -1 ? String(r[treatedNoReasonIdx] ?? '').trim() : '',
         dateOsc: dateOscIdx !== -1 ? (parseCellDate(r[dateOscIdx])?.toISOString() || null) : null,
         dateOscRaw: dateOscIdx !== -1 ? String(r[dateOscIdx] ?? '').trim() : '',
+        labApptDate: (() => { const d = labApptIdx !== -1 ? parseCellDate(r[labApptIdx]) : null; return d && isPlausibleExamDate(d.toISOString()) ? d.toISOString() : null; })(),
         biopsyDone: endoscopyDoneIdx !== -1 ? String(r[endoscopyDoneIdx] ?? '').trim() : '',
         biopsyDate: endoscopyDateIdx !== -1 ? (parseCellDate(r[endoscopyDateIdx])?.toISOString() || null) : null,
         biopsyStatus: '',
@@ -16186,6 +16219,7 @@ async function syncColonReferenceFromGitHub() {
     Object.keys(ref).forEach(k => {
       if (k === 'hospital' || k === 'regDate') return;
       const v = ref[k];
+      if (k === 'labApptDate') { if (v) e.labApptDate = v; return; }
       if (v && !e[k]) e[k] = v;
     });
     e.lastSyncedAt = new Date().toISOString();
@@ -16301,6 +16335,7 @@ async function fetchColonReferenceSheetData() {
     // that same row correctly reads the actual current date).
     const timestampIdx = findCol(labels, ['طابع زمني', 'timestamp']);
     const consentIdx = findCol(labels, ['حضر موعد الحاليل', 'موعد التحاليل', 'حضر موعد التحاليل', 'consent for exam', 'consent', 'الموافقة على الفحص', 'موافقة على الفحص', 'الموافقة']);
+    const labApptIdx = findLabApptDateIdx(labels, consentIdx);
     const phoneContactIdx = findCol(labels, ['التواصل هاتفيا', 'التواصل هاتفياً', 'phone contact', 'تم التواصل']);
     const rejectionIdx = findCol(labels, ['reason for rejection', 'سبب الرفض', 'سبب رفض']);
     const endoscopyNoReasonIdx = findCol(labels, ['what is the reason', 'إذا كانت الإجابة لا', 'في حال لا']);
@@ -16353,6 +16388,7 @@ async function fetchColonReferenceSheetData() {
         treatedNoReason: treatedNoReasonIdx !== -1 ? String(r[treatedNoReasonIdx] ?? '').trim() : '',
         dateOsc: dateOscIdx !== -1 ? (parseCellDate(r[dateOscIdx])?.toISOString() || null) : null,
         dateOscRaw: dateOscIdx !== -1 ? String(r[dateOscIdx] ?? '').trim() : '',
+        labApptDate: (() => { const d = labApptIdx !== -1 ? parseCellDate(r[labApptIdx]) : null; return d && isPlausibleExamDate(d.toISOString()) ? d.toISOString() : null; })(),
         biopsyDone: endoscopyDoneIdx !== -1 ? String(r[endoscopyDoneIdx] ?? '').trim() : '',
         biopsyDate: endoscopyDateIdx !== -1 ? (parseCellDate(r[endoscopyDateIdx])?.toISOString() || null) : null,
         biopsyStatus: '',
@@ -17042,6 +17078,7 @@ async function searchPositiveCasesInReferenceSheet() {
         e.endoscopyNoReason2 = ref.endoscopyNoReason2 || e.endoscopyNoReason2;
         e.treatedNoReason = ref.treatedNoReason || e.treatedNoReason;
         e.dateOsc = ref.dateOsc || e.dateOsc;
+        if (ref.labApptDate) e.labApptDate = ref.labApptDate;
         e.dateOscRaw = ref.dateOscRaw || e.dateOscRaw;
         e.endoscopyResult = ref.endoscopyResult || e.endoscopyResult;
         e.biopsyTaken = ref.biopsyTaken || e.biopsyTaken;
@@ -17073,7 +17110,7 @@ async function searchPositiveCasesInReferenceSheet() {
           date: ref.regDate || null, dateEstimated: false,
           loggedAt: new Date().toISOString(), num, age: ref.age,
           ageExcluded: ref.age === null || ref.age === undefined || ref.age < MODULES.colon.ageMin || ref.age > MODULES.colon.ageMax,
-          consentForExam: ref.consentForExam, attendanceReason: ref.attendanceReason, phoneContactStatus: ref.phoneContactStatus, rejectionReason: ref.rejectionReason, endoscopyNoReason2: ref.endoscopyNoReason2, treatedNoReason: ref.treatedNoReason, dateOsc: ref.dateOsc, dateOscRaw: ref.dateOscRaw,
+          consentForExam: ref.consentForExam, attendanceReason: ref.attendanceReason, phoneContactStatus: ref.phoneContactStatus, rejectionReason: ref.rejectionReason, endoscopyNoReason2: ref.endoscopyNoReason2, treatedNoReason: ref.treatedNoReason, dateOsc: ref.dateOsc, dateOscRaw: ref.dateOscRaw, labApptDate: ref.labApptDate || null,
           biopsyDate: ref.biopsyDate, biopsyStatus: ref.biopsyStatus, biopsyDone: ref.biopsyDone,
           endoscopyResult: ref.endoscopyResult, biopsyTaken: ref.biopsyTaken,
           postBiopsyAppointment: ref.postBiopsyAppointment, treatmentPlan: ref.treatmentPlan, notes: ref.notes,
