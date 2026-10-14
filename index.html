@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.48.2</span>
+  <span id="app-version">الإصدار 8.50.1</span>
   <button type="button" id="datefix-btn" onclick="showDateFixLog()" style="display:none"></button>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
@@ -3653,6 +3653,10 @@ const I18N = {
     kpiRefusedOrNoShow: "Refused/No-Show",
     kpiAvgDaysClosed: "Avg Days for Closed Cases",
     kpiAvgDaysIncomplete: "Avg Days for Incomplete Cases",
+    kpiColonCompliance: "Colonoscopy ≤{n} days (% of completed)",
+    kpiColonCompleted: "Completed colonoscopies",
+    kpiColonAvgWait: "Avg wait (days)",
+    kpiColonMedianWait: "Median wait (days)",
     kpiAchievementPct: "Achievement % Within Deadline",
     summarySheetLbl: "Summary",
     dateNeedsReviewMsg: "{n} case(s) have a corrupted original date in the file — the submission timestamp was used instead as a temporary fallback. Reviewing the \"Date of receiving sample\" column for these cases in the source file is recommended.",
@@ -4560,6 +4564,10 @@ const I18N = {
     kpiRefusedOrNoShow: "رفض/عدم حضور الفحص",
     kpiAvgDaysClosed: "متوسط الأيام للحالات المكتملة",
     kpiAvgDaysIncomplete: "متوسط الأيام للحالات غير المكتملة",
+    kpiColonCompliance: "المنظار خلال ≤{n} يومًا (% من المكتملة)",
+    kpiColonCompleted: "من أتمّوا المنظار",
+    kpiColonAvgWait: "متوسط وقت الانتظار (يوم)",
+    kpiColonMedianWait: "وسيط وقت الانتظار (يوم)",
     kpiAchievementPct: "نسبة الإنجاز خلال الفترة المحددة",
     summarySheetLbl: "الملخص",
     dateNeedsReviewMsg: "{n} حالة تاريخها الأصلي بالملف غير صحيح — تم استخدام تاريخ التسجيل (الطابع الزمني) بدلًا منه مؤقتًا. يُنصح بمراجعة عمود \"تاريخ استلام العينة\" لهذه الحالات بالملف المصدر.",
@@ -10544,8 +10552,8 @@ function exportHoldingHealthFile() {
   const crcAoa = [
     ['Colorectal Cancer Data Collection – 2026', ...Array(7).fill(null), 'CRC Summary'],
     ['Instructions', ...Array(7).fill(null), 'Total patients / referrals'],
-    ['Enter one patient per row. Use Patient ID as the unique identifier. Referral-to-colonoscopy days and 28-day status are calculated automatically.', ...Array(7).fill(null), 'Total colonoscopies done'],
-    ['Any patient who did fit test for colorectal cancer screening', ...Array(7).fill(null), '% colonoscopy within 28 days'],
+    ['Enter one patient per row. Use Patient ID as the unique identifier. Referral-to-colonoscopy days and 90-day status are calculated automatically.', ...Array(7).fill(null), 'Total colonoscopies done'],
+    ['Any patient who did fit test for colorectal cancer screening', ...Array(7).fill(null), '% colonoscopy within 90 days'],
     [...crcHeader, null, 'Average waiting time (days)'],
     ...colonRows
   ];
@@ -10553,7 +10561,7 @@ function exportHoldingHealthFile() {
   setFormula(crcWs, 'J2', `COUNTA(A6:A${crcLast})`);
   setFormula(crcWs, 'J3', `COUNTIF(E6:E${crcLast},"<>")`);
   setFormula(crcWs, 'J4',
-    `IFERROR(SUMPRODUCT((ISNUMBER(D6:D${crcLast}))*(ISNUMBER(E6:E${crcLast}))*(IFERROR(E6:E${crcLast}-D6:D${crcLast},-1)>=0)*(IFERROR(E6:E${crcLast}-D6:D${crcLast},999)<=28))/SUMPRODUCT((ISNUMBER(D6:D${crcLast}))*(ISNUMBER(E6:E${crcLast}))*(IFERROR(E6:E${crcLast}-D6:D${crcLast},-1)>=0)),0)`,
+    `IFERROR(SUMPRODUCT((ISNUMBER(D6:D${crcLast}))*(ISNUMBER(E6:E${crcLast}))*(IFERROR(E6:E${crcLast}-D6:D${crcLast},-1)>=0)*(IFERROR(E6:E${crcLast}-D6:D${crcLast},999)<=90))/SUMPRODUCT((ISNUMBER(D6:D${crcLast}))*(ISNUMBER(E6:E${crcLast}))*(IFERROR(E6:E${crcLast}-D6:D${crcLast},-1)>=0)),0)`,
     '0.0%');
   setFormula(crcWs, 'J5',
     `IFERROR(SUMPRODUCT((ISNUMBER(D6:D${crcLast}))*(ISNUMBER(E6:E${crcLast}))*(IFERROR(E6:E${crcLast}-D6:D${crcLast},-1)>=0)*IFERROR(E6:E${crcLast}-D6:D${crcLast},0))/SUMPRODUCT((ISNUMBER(D6:D${crcLast}))*(ISNUMBER(E6:E${crcLast}))*(IFERROR(E6:E${crcLast}-D6:D${crcLast},-1)>=0)),0)`,
@@ -10614,7 +10622,7 @@ function exportHoldingHealthFile() {
     ['Indicator','Value','Definition','Owner / Source'],
     ['CRC – Total referrals', null, 'Number of unique patient rows entered in CRC sheet', 'Primary to Secondary referrals'],
     ['CRC – Total colonoscopies', null, 'Patients with colonoscopy date entered', 'Secondary care / endoscopy'],
-    ['CRC – Within 28 days (%)', null, 'Colonoscopy completed within 28 days from referral', 'Calculated'],
+    ['CRC – Within 90 days (%)', null, 'Colonoscopy completed within 90 days from referral', 'Calculated'],
     ['CRC – Avg waiting time (days)', null, 'Average days between referral and colonoscopy', 'Calculated'],
     ['Breast – Total patients', null, 'Number of unique patient rows entered in breast sheet', 'PHC referrals / tracking'],
     ['Breast – Total mammograms', null, 'Patients with mammogram completed', 'Radiology'],
@@ -10643,7 +10651,7 @@ function exportHoldingHealthFile() {
   // exactly) — static methodology reference text ----
   const indicatorAoa = [
     ['Indicator','Definition','Numerator','Denominator','Notes'],
-    ['Colonoscopy within 28 days','Patients referred from Primary Care who completed colonoscopy within 28 days of referral','Number of patients who completed colonoscopy ≤28 days from referral','Total number of referred patients from PHC to secondary care for suspected colorectal cancer','Used to monitor access and timeliness of diagnostic services'],
+    ['Colonoscopy within 90 days','Patients referred from Primary Care who completed colonoscopy within 90 days of referral','Number of patients who completed colonoscopy ≤90 days from referral','Total number of referred patients from PHC to secondary care for suspected colorectal cancer','Used to monitor access and timeliness of diagnostic services'],
     ['Mammogram screening','Number of women who completed a mammogram screening during the reporting period','Number of women who completed mammography','Total eligible women referred or screened for breast cancer','Used for breast cancer screening coverage monitoring'],
     ['FNA procedures','Number of patients who underwent Fine Needle Aspiration (FNA) following abnormal imaging or clinical suspicion','Number of FNA procedures performed','Total number of suspected breast cancer cases requiring diagnostic confirmation','Used to monitor diagnostic pathway performance'],
   ];
@@ -13027,7 +13035,7 @@ function isPlausibleExamDate(iso) {
 // present and plausible. An implausible date is shown to the user but
 // excluded from the 14-day calculation so a typo like "2028" can't make
 // the countdown wildly wrong.
-// تاريخ بداية مهلة الـ28 يومًا للقولون: تاريخ التحليل/موعد التحاليل من الملف
+// تاريخ بداية مهلة القولون (BIOPSY_DEADLINE_DAYS.colon) للقولون: تاريخ التحليل/موعد التحاليل من الملف
 // المرجعي (الدرعية: عمود "موعد التحاليل" = O، الدوادمي: DATE OSC)،
 // وإلا يرجع لتاريخ الفحص المعتاد.
 function deadlineStartDate(e) {
@@ -13648,7 +13656,7 @@ let positiveLog = [];        // [{id, hospital, module, date, loggedAt, biopsyDa
 let lastColonRefSyncAt = null;
 let positiveSeenIds = { breast: [], colon: [] }; // dedup so re-uploading the same file doesn't re-alert
 let lastReferenceSyncError = null; // surfaced in the log UI instead of failing silently
-const BIOPSY_DEADLINE_DAYS = { breast: 14, colon: 28 }; // breast: exam → biopsy. colon: exam → endoscopy
+const BIOPSY_DEADLINE_DAYS = { breast: 14, colon: 90 }; // breast: exam → biopsy. colon: exam → endoscopy
 
 async function loadPositiveLog() {
   // Guard against the browser silently restoring a previously-typed value
@@ -14314,6 +14322,28 @@ function getPositiveLogPeriodFilter() {
     return true;
   };
   return { fromDt, toDt, inRange };
+}
+// مؤشرات القولون (حسب وثيقة KPIs): وقت الانتظار الفردي = تاريخ المنظار − تاريخ
+// البداية (deadlineStartDate: DATE OSC بالدوادمي / موعد التحاليل بالدرعية، وإلا
+// تاريخ الفحص). المقام = كل من أتمّ المنظار. القيم السالبة (خطأ إدخال) تُستبعد.
+function colonWaitKpis(cases) {
+  const waits = [];
+  let excluded = 0;
+  cases.forEach(e => {
+    if (e.module !== 'colon' || !e.biopsyDate) return;
+    const start = deadlineStartDate(e);
+    if (!start) return;
+    const days = Math.round((new Date(e.biopsyDate) - new Date(start)) / 86400000);
+    if (isNaN(days) || days < 0) { excluded++; return; }
+    waits.push(days);
+  });
+  waits.sort((a, b) => a - b);
+  const n = waits.length;
+  const within = waits.filter(d => d <= BIOPSY_DEADLINE_DAYS.colon).length;
+  const mean = n ? waits.reduce((a, b) => a + b, 0) / n : null;
+  const median = n ? (n % 2 ? waits[(n - 1) / 2] : (waits[n / 2 - 1] + waits[n / 2]) / 2) : null;
+  const pct = n ? Math.round((within / n) * 1000) / 10 : null;
+  return { n, within, pct, mean, median, excluded };
 }
 function summarizeCases(cases) {
   const total = cases.length;
@@ -15797,7 +15827,7 @@ function scanColonPositiveSheet(hospital) {
       treatedNoReason,
       dateOsc: dateOsc ? dateOsc.toISOString() : null,
       dateOscRaw,
-      // الدوادمي: بداية مهلة الـ28 يومًا = DATE OSC (وإلا يرجع لتاريخ الفحص)
+      // الدوادمي: بداية مهلة القولون (BIOPSY_DEADLINE_DAYS.colon) = DATE OSC (وإلا يرجع لتاريخ الفحص)
       ...(hospital === 'الدوادمي' ? { labApptDate: (dateOsc && isPlausibleExamDate(dateOsc.toISOString())) ? dateOsc.toISOString() : null } : {}),
       biopsyDate: endoscopyDt ? endoscopyDt.toISOString() : null,
       biopsyStatus: !endoscopyDt && endoscopyDone ? endoscopyDone : '',
@@ -16759,6 +16789,15 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
       ${kpi(s.pct14 + '%', t('kpiAchievementPct'), ringColorByPct(s.pct14))}
       ${kpi(s.withBiopsy, t('kpiWithBiopsy'))}
       ${kpi(s.withPlan, t('kpiWithPlan'))}
+      ${(() => {
+        if (currentModule !== 'colon') return '';
+        const w = colonWaitKpis(cases);
+        const f1 = v => v === null ? '—' : (Math.round(v * 10) / 10);
+        return kpi(w.pct === null ? '—' : w.pct + '%', `${t('kpiColonCompliance').replace('{n}', BIOPSY_DEADLINE_DAYS.colon)} (${w.within}/${w.n})`, w.pct === null ? 'var(--muted)' : ringColorByPct(w.pct))
+          + kpi(w.n, t('kpiColonCompleted'))
+          + kpi(f1(w.mean), t('kpiColonAvgWait'), 'var(--warn)')
+          + kpi(f1(w.median), t('kpiColonMedianWait'), 'var(--warn)');
+      })()}
       ${currentModule === 'colon' ? '' : kpi(s.cancer, t('kpiCancer'), 'var(--danger)')}
       ${currentModule === 'colon' ? kpi(cases.filter(e => isRefusedOrNoShowValue(e.attendanceReason) || isRefusedOrNoShowValue(e.rejectionReason) || isRefusedOrNoShowValue(e.endoscopyNoReason2) || isRefusedOrNoShowValue(e.treatedNoReason) || isRefusedOrNoShowValue(e.endoscopyResult) || isRefusedOrNoShowValue(e.notes) || normalizeConsentValue(e.biopsyDone) === 'No').length, t('kpiRefusedOrNoShow'), 'var(--warn)') : ''}
       ${(() => {
