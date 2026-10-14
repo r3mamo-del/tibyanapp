@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.50.1</span>
+  <span id="app-version">الإصدار 8.51.0</span>
   <button type="button" id="datefix-btn" onclick="showDateFixLog()" style="display:none"></button>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
@@ -3655,6 +3655,8 @@ const I18N = {
     kpiAvgDaysIncomplete: "Avg Days for Incomplete Cases",
     kpiColonCompliance: "Colonoscopy ≤{n} days (% of completed)",
     kpiColonCompleted: "Completed colonoscopies",
+    kpiFromOscTag: "[OSC/appointment] ",
+    kpiFromSampleTag: "[From sample date] ",
     kpiColonAvgWait: "Avg wait (days)",
     kpiColonMedianWait: "Median wait (days)",
     kpiAchievementPct: "Achievement % Within Deadline",
@@ -4566,6 +4568,8 @@ const I18N = {
     kpiAvgDaysIncomplete: "متوسط الأيام للحالات غير المكتملة",
     kpiColonCompliance: "المنظار خلال ≤{n} يومًا (% من المكتملة)",
     kpiColonCompleted: "من أتمّوا المنظار",
+    kpiFromOscTag: "[من موعد التحاليل/OSC] ",
+    kpiFromSampleTag: "[من ظهور العينة] ",
     kpiColonAvgWait: "متوسط وقت الانتظار (يوم)",
     kpiColonMedianWait: "وسيط وقت الانتظار (يوم)",
     kpiAchievementPct: "نسبة الإنجاز خلال الفترة المحددة",
@@ -14326,12 +14330,13 @@ function getPositiveLogPeriodFilter() {
 // مؤشرات القولون (حسب وثيقة KPIs): وقت الانتظار الفردي = تاريخ المنظار − تاريخ
 // البداية (deadlineStartDate: DATE OSC بالدوادمي / موعد التحاليل بالدرعية، وإلا
 // تاريخ الفحص). المقام = كل من أتمّ المنظار. القيم السالبة (خطأ إدخال) تُستبعد.
-function colonWaitKpis(cases) {
+function colonWaitKpis(cases, startFn) {
+  startFn = startFn || deadlineStartDate;
   const waits = [];
   let excluded = 0;
   cases.forEach(e => {
     if (e.module !== 'colon' || !e.biopsyDate) return;
-    const start = deadlineStartDate(e);
+    const start = startFn(e);
     if (!start) return;
     const days = Math.round((new Date(e.biopsyDate) - new Date(start)) / 86400000);
     if (isNaN(days) || days < 0) { excluded++; return; }
@@ -16793,10 +16798,12 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
         if (currentModule !== 'colon') return '';
         const w = colonWaitKpis(cases);
         const f1 = v => v === null ? '—' : (Math.round(v * 10) / 10);
-        return kpi(w.pct === null ? '—' : w.pct + '%', `${t('kpiColonCompliance').replace('{n}', BIOPSY_DEADLINE_DAYS.colon)} (${w.within}/${w.n})`, w.pct === null ? 'var(--muted)' : ringColorByPct(w.pct))
-          + kpi(w.n, t('kpiColonCompleted'))
-          + kpi(f1(w.mean), t('kpiColonAvgWait'), 'var(--warn)')
-          + kpi(f1(w.median), t('kpiColonMedianWait'), 'var(--warn)');
+        const w2 = colonWaitKpis(cases, usableExamDate); // من تاريخ ظهور العينة (استلام العينة) إلى المنظار
+        const row = (w, tag) => kpi(w.pct === null ? '—' : w.pct + '%', `${tag}${t('kpiColonCompliance').replace('{n}', BIOPSY_DEADLINE_DAYS.colon)} (${w.within}/${w.n})`, w.pct === null ? 'var(--muted)' : ringColorByPct(w.pct))
+          + kpi(w.n, `${tag}${t('kpiColonCompleted')}`)
+          + kpi(f1(w.mean), `${tag}${t('kpiColonAvgWait')}`, 'var(--warn)')
+          + kpi(f1(w.median), `${tag}${t('kpiColonMedianWait')}`, 'var(--warn)');
+        return row(w, t('kpiFromOscTag')) + row(w2, t('kpiFromSampleTag'));
       })()}
       ${currentModule === 'colon' ? '' : kpi(s.cancer, t('kpiCancer'), 'var(--danger)')}
       ${currentModule === 'colon' ? kpi(cases.filter(e => isRefusedOrNoShowValue(e.attendanceReason) || isRefusedOrNoShowValue(e.rejectionReason) || isRefusedOrNoShowValue(e.endoscopyNoReason2) || isRefusedOrNoShowValue(e.treatedNoReason) || isRefusedOrNoShowValue(e.endoscopyResult) || isRefusedOrNoShowValue(e.notes) || normalizeConsentValue(e.biopsyDone) === 'No').length, t('kpiRefusedOrNoShow'), 'var(--warn)') : ''}
