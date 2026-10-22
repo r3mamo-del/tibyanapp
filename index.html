@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.51.1</span>
+  <span id="app-version">الإصدار 8.52.0</span>
   <button type="button" id="datefix-btn" onclick="showDateFixLog()" style="display:none"></button>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
@@ -14239,7 +14239,20 @@ function isCaseClosed(e) {
   const status = classifyBreastBiopsyStatus(e.biopsyDone);
   if (status === 'done' || status === 'rejected') return true;
   if (String(e.notes || '').toLowerCase().includes('referral')) return true;
+  if (breastManagementPlanClosesCase(e)) return true;
   return false;
+}
+// عمود "Management Plan" بملف الثدي المرجعي (Follow up / Referral / OR /
+// Refuse ...): أي قيمة مسجَّلة فيه تعني أن الحالة اتُّخذ فيها قرار نهائي
+// فتُغلق وتُحسب مكتملة. نتجاهل نص BIRAD (قد يحل مكان الخطة بمسارات قديمة)
+// وعبارات الانتظار (waiting / pending / بانتظار) لأنها ليست خطة فعلية.
+function breastManagementPlanClosesCase(e) {
+  if (!e || e.module === 'colon') return false;
+  const plan = String(e.treatmentPlan || '').trim();
+  if (!plan || plan === '-' || plan === '—') return false;
+  if (/^\s*bi-?rads?\b/i.test(plan)) return false;
+  if (/wait|pending|بانتظار|قيد\s*الانتظار|انتظار/i.test(plan)) return false;
+  return true;
 }
 // عرض فقط — لا يغيّر أي بيانات بالملف الأصلي المرفوع/المزامن: حالات
 // القولون اللي أي عمود حضور فيها (موعد التحاليل أو موعد المنظار) = "لم
