@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.52.0</span>
+  <span id="app-version">الإصدار 8.52.2</span>
   <button type="button" id="datefix-btn" onclick="showDateFixLog()" style="display:none"></button>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
@@ -10461,6 +10461,17 @@ function collectHoldingModuleRows(moduleKey) {
     // the Ministry quarterly exports.
     const logMap = new Map();
     positiveLog.filter(e => e.module === moduleKey).forEach(e => { if (e.num && !logMap.has(e.num)) logMap.set(e.num, e); });
+    // الثدي: سجل الحالات الإيجابية المخزَّن قد يكون فاضيًا/قديمًا لأن الثدي
+    // يُحسب live (ملف المستشفى + الملف المرجعي المركزي) — فكان "FNA Date"
+    // يطلع فاضي رغم وجود تاريخ الخزعة بالملف المرجعي. نقرأ الآن نفس المصدر
+    // الحي أولًا (Biopsy Date)، ونرجع للسجل المخزَّن كاحتياط.
+    const liveBiopsyByNum = new Map();
+    if (moduleKey === 'breast' && res.range) {
+      try {
+        const live = getUnifiedPositiveCases('breast', res.range);
+        (live.cases || []).forEach(lc => { if (lc.num && lc.biopsyDate && !liveBiopsyByNum.has(lc.num)) liveBiopsyByNum.set(lc.num, lc.biopsyDate); });
+      } catch (err) { console.error('holding FNA live enrichment failed', err); }
+    }
 
     const rows = res.cases.map(c => {
       const isPos = isPositiveCategory(c.category);
@@ -10472,7 +10483,8 @@ function collectHoldingModuleRows(moduleKey) {
         // exports reuse the single tracked scan date across every "date
         // of X" column the template asks for. FNA only ever follows a
         // positive/suspicious reading, so it's filled only then.
-        const fnaDate = (isPos && logEntry && logEntry.biopsyDate) ? formatDateForExport(new Date(logEntry.biopsyDate)) : '';
+        const fnaIso = (liveBiopsyByNum.get(c.num)) || (logEntry && logEntry.biopsyDate) || null;
+        const fnaDate = (isPos && fnaIso) ? formatDateForExport(new Date(fnaIso)) : '';
         return [c.num, biradFullLabel(c.biradRaw, c.category), cleanDate(c), fnaDate, hospitalName, noteFor(c)];
       }
       // Colon: referral to secondary care only happens after a positive
@@ -14184,6 +14196,7 @@ function classifyBreastBiopsyStatus(raw) {
   return 'done'; // احتياطي: أي قيمة معبأة غير متوقّعة تُعامَل كإجراء تمّ (نفس السلوك القديم الآمن)، بدل ما تُفقَد
 }
 function breastIncompleteStep(e) {
+  if (breastManagementPlanClosesCase(e)) return null; // عمود Management Plan مسجَّل = الحالة مغلقة
   const status = classifyBreastBiopsyStatus(e.biopsyDone);
   if (status === 'empty') {
     if (String(e.notes || '').toLowerCase().includes('referral')) return null; // مغلقة عبر إحالة موثَّقة بالملاحظات
