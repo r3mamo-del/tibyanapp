@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.52.4</span>
+  <span id="app-version">الإصدار 8.52.5</span>
   <button type="button" id="datefix-btn" onclick="showDateFixLog()" style="display:none"></button>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
@@ -18074,7 +18074,7 @@ async function fetchGitHubJson(path) {
   const url = `${TIBYAN_PROXY_URL}/${path}?_cb=${Date.now()}`;
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
-    if (res.status === 404) throw new Error(`الملف غير موجود بالمستودع: ${path}`);
+    if (res.status === 404) { const e404 = new Error(`الملف غير موجود بالمستودع: ${path}`); e404.noData = true; throw e404; }
     if (res.status === 401 || res.status === 403) throw new Error('تعذّر الوصول لبيانات المستودع — راجع إعدادات الطبقة الوسيطة (Cloudflare Worker).');
     throw new Error(`فشل جلب ${path} (${res.status})`);
   }
@@ -18312,7 +18312,7 @@ function refreshAfifSourceUi() {
 async function loadHospitalFromGitHubInner(moduleKey, hospital) {
   const data = await fetchGitHubJson(`data/${moduleKey}/${hospital}.json`);
   const dominant = pickDominantSheetFromGitHubData(data.sheets);
-  if (!dominant) throw new Error(`ملف ${hospital} فاضي أو بدون بيانات حقيقية`);
+  if (!dominant) { const eEmpty = new Error(`ملف ${hospital} فاضي أو بدون بيانات حقيقية`); eEmpty.noData = true; throw eEmpty; }
 
   const pending = convertGitHubSheetToPending(dominant);
   const st = reportStateStore[moduleKey][hospital];
@@ -18466,6 +18466,7 @@ async function refreshAllFromGitHub(isManual) {
   const originalModule = currentModule;
   let okCount = 0, failCount = 0;
   const failedHospitals = [];
+  const noDataHospitals = []; // مستشفى بدون ملف/بيانات بعد — ليس فشلًا
   if (statusEl) { statusEl.style.color = 'var(--muted)'; statusEl.textContent = 'جاري المزامنة...'; }
 
   // بناء على طلب صريح (بلاغ تأخير ملحوظ بسحب البيانات): كانت كل ملفات
@@ -18486,6 +18487,8 @@ async function refreshAllFromGitHub(isManual) {
     const { moduleKey, hospital } = allJobs[i];
     if (result.status === 'fulfilled') {
       okCount++;
+    } else if (result.reason && result.reason.noData) {
+      noDataHospitals.push(`${hospital} (${moduleKey === 'colon' ? 'قولون' : 'ثدي'})`);
     } else {
       console.error(`GitHub sync failed for ${moduleKey}/${hospital}`, result.reason);
       failCount++;
@@ -18510,7 +18513,7 @@ async function refreshAllFromGitHub(isManual) {
     (async () => { try { await syncBreastReferenceFromGitHub(); } catch (e) { console.error('breast reference sync failed', e); } })(),
   ]);
 
-  const summary = `✅ تمّت مزامنة ${okCount} ملف` + (failCount > 0 ? ` — فشل ${failCount}: ${failedHospitals.join('، ')}` : '');
+  const summary = `✅ تمّت مزامنة ${okCount} ملف` + (failCount > 0 ? ` — فشل ${failCount}: ${failedHospitals.join('، ')}` : '') + (noDataHospitals.length ? ` — لا توجد بيانات بعد: ${noDataHospitals.join('، ')}` : '');
   if (statusEl) { statusEl.style.color = failCount > 0 ? 'var(--warn)' : 'var(--success)'; statusEl.textContent = summary; }
   if (isManual && failCount > 0) showAlertModal(summary);
 
