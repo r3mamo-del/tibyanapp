@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.52.3</span>
+  <span id="app-version">الإصدار 8.52.4</span>
   <button type="button" id="datefix-btn" onclick="showDateFixLog()" style="display:none"></button>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
@@ -5452,7 +5452,7 @@ function modLabel(moduleKey) {
 const HOSPITAL_ASCII_NAMES = {
   'الدرعية': 'Diriyah', 'الدوادمي': 'Dawadmi', 'شقراء': 'Shaqra',
   'حريملاء': 'Huraymila', 'عفيف': 'Afif', 'البجادية': 'Bijadiyah',
-  'ساجر': 'Sajir', 'ثادق': 'Thadiq', 'مرات': 'Muraat', 'وثيلان': 'Wathilan',
+  'ساجر': 'Sajir', 'ثادق': 'Thadiq', 'مرات': 'Muraat', 'وثيلان': 'Wathilan', 'ضرما': 'Dhurma',
 };
 function asciiHospitalName(name) {
   return HOSPITAL_ASCII_NAMES[name] || String(name || '').replace(/[^\w\-]+/g, '-').replace(/-+/g, '-') || 'Hospital';
@@ -8475,6 +8475,7 @@ const HOSPITAL_NAME_VARIANTS = {
   'ثادق':     ['thadiq', 'thadig', 'thadq'],
   'مرات':     ['marat', 'muraat', 'marrat'],
   'وثيلان':   ['wathilan', 'wthilan', 'wuthilan', 'wathelan', 'wthelan', 'wuthaylan', 'وثيلان'],
+  'ضرما':     ['dhurma', 'dhurmaa', 'dirma', 'dhirma', 'durma', 'dharma', 'ضرماء', 'ضرما'],
 };
 
 // Checks whether a report-builder file uploaded into the SLOT for
@@ -13116,7 +13117,7 @@ function normalizeNum(v) {
 //  ADMIN — PERFORMANCE REPORT BUILDER
 // ═══════════════════════════════════════════════════════
 const REPORT_HOSPITALS_BREAST = ['الدرعية', 'الدوادمي', 'شقراء', 'حريملاء', 'عفيف'];
-const REPORT_HOSPITALS_COLON = ['الدرعية', 'الدوادمي', 'شقراء', 'حريملاء', 'عفيف', 'البجادية', 'ساجر', 'ثادق', 'مرات', 'وثيلان'];
+const REPORT_HOSPITALS_COLON = ['الدرعية', 'الدوادمي', 'شقراء', 'حريملاء', 'عفيف', 'البجادية', 'ساجر', 'ثادق', 'مرات', 'وثيلان', 'ضرما'];
 const REPORT_HOSPITALS_BY_MODULE = { breast: REPORT_HOSPITALS_BREAST, colon: REPORT_HOSPITALS_COLON };
 // Switches with the active module — same pattern as reportState/reportStateStore
 // just below. Initialized for 'breast' since that's the default startup module.
@@ -13127,7 +13128,7 @@ let REPORT_HOSPITALS = REPORT_HOSPITALS_BREAST;
 const HOSPITAL_EN_NAMES = {
   'الدرعية': 'Al-Diriyah', 'الدوادمي': 'Al-Duwadimi', 'شقراء': 'Shaqra',
   'حريملاء': 'Huraymila', 'عفيف': 'Afif',
-  'البجادية': 'Al-Bajadiyah', 'ساجر': 'Sajir', 'ثادق': 'Thadiq', 'مرات': 'Marat', 'وثيلان': 'Wathilan',
+  'البجادية': 'Al-Bajadiyah', 'ساجر': 'Sajir', 'ثادق': 'Thadiq', 'مرات': 'Marat', 'وثيلان': 'Wathilan', 'ضرما': 'Dhurma',
 };
 function hospitalDisplayName(arabicName) {
   if (currentLang === 'en' && HOSPITAL_EN_NAMES[arabicName]) return HOSPITAL_EN_NAMES[arabicName];
@@ -13137,7 +13138,7 @@ function hospitalDisplayName(arabicName) {
 // Hospitals are grouped into geographic "نطاق" zones for the report's
 // visual cards, matching the cluster's official slide layout.
 const REPORT_ZONES = [
-  { zoneName: 'نطاق الرياض',   zoneNameEn: 'Riyadh Zone',   hospitals: ['الدرعية', 'حريملاء'] },
+  { zoneName: 'نطاق الرياض',   zoneNameEn: 'Riyadh Zone',   hospitals: ['الدرعية', 'حريملاء', 'ضرما'] },
   { zoneName: 'نطاق شقراء',    zoneNameEn: 'Shaqra Zone',   hospitals: ['شقراء', 'ثادق', 'مرات', 'وثيلان'] },
   { zoneName: 'نطاق الدوادمي', zoneNameEn: 'Al-Duwadimi Zone', hospitals: ['الدوادمي', 'عفيف', 'البجادية', 'ساجر'] }
 ];
@@ -18723,6 +18724,7 @@ const COLON_HOSPITAL_NAME_PATTERNS = {
   'ثادق': ['thadiq', 'thadig'],
   'مرات': ['muraat', 'marat'],
   'وثيلان': ['wathilan', 'wthilan', 'wathelan', 'wthelan'],
+  'ضرما': ['dhurma', 'dirma', 'dhirma', 'durma'],
 };
 function detectReferredFromHospital(rawValue, excludeHospital) {
   const s = String(rawValue ?? '').trim().toLowerCase();
