@@ -3454,7 +3454,7 @@ VdICDRfEXD7c7pPURR9EWJkH0Vff7+o25/71vp6Mu12jTFGq/feax8CLYDwc343rgiIoq+ZmAGIoq+vF
 
 <!-- ═══ FOOTER ═══ -->
 <footer id="app-footer">
-  <span id="app-version">الإصدار 8.52.5</span>
+  <span id="app-version">الإصدار 8.53.1</span>
   <button type="button" id="datefix-btn" onclick="showDateFixLog()" style="display:none"></button>
   <button type="button" id="help-btn" onclick="showHelpModal()" data-i18n="helpBtnFull">❓ المساعدة</button>
 </footer>
@@ -3659,6 +3659,9 @@ const I18N = {
     kpiFromSampleTag: "From sample date → colonoscopy date",
     kpiColonAvgWait: "Avg wait (days)",
     kpiColonMedianWait: "Median wait (days)",
+    kpiColonWithin28: "Done within ≤28 days (count)",
+    kpiColonMid: "Done after 28 and up to {n} days (count)",
+    kpiColonOverDl: "Done after more than {n} days (count)",
     kpiAchievementPct: "Achievement % Within Deadline",
     summarySheetLbl: "Summary",
     dateNeedsReviewMsg: "{n} case(s) have a corrupted original date in the file — the submission timestamp was used instead as a temporary fallback. Reviewing the \"Date of receiving sample\" column for these cases in the source file is recommended.",
@@ -4572,6 +4575,9 @@ const I18N = {
     kpiFromSampleTag: "من تاريخ ظهور العينة ← إلى تاريخ المنظار",
     kpiColonAvgWait: "متوسط وقت الانتظار (يوم)",
     kpiColonMedianWait: "وسيط وقت الانتظار (يوم)",
+    kpiColonWithin28: "تم المنظار خلال 28 يومًا أو أقل (العدد)",
+    kpiColonMid: "تم المنظار بعد 28 يومًا وحتى {n} يومًا (العدد)",
+    kpiColonOverDl: "تم المنظار بعد أكثر من {n} يومًا (العدد)",
     kpiAchievementPct: "نسبة الإنجاز خلال الفترة المحددة",
     summarySheetLbl: "الملخص",
     dateNeedsReviewMsg: "{n} حالة تاريخها الأصلي بالملف غير صحيح — تم استخدام تاريخ التسجيل (الطابع الزمني) بدلًا منه مؤقتًا. يُنصح بمراجعة عمود \"تاريخ استلام العينة\" لهذه الحالات بالملف المصدر.",
@@ -14373,10 +14379,14 @@ function colonWaitKpis(cases, startFn) {
   waits.sort((a, b) => a - b);
   const n = waits.length;
   const within = waits.filter(d => d <= BIOPSY_DEADLINE_DAYS.colon).length;
+  // نطاقات إضافية (طلب صريح): ≤28 يومًا، أكثر من 28 وحتى المهلة (90)، وما بعد المهلة.
+  const within28 = waits.filter(d => d <= 28).length;
+  const mid28to90 = waits.filter(d => d > 28 && d <= BIOPSY_DEADLINE_DAYS.colon).length;
+  const over90 = waits.filter(d => d > BIOPSY_DEADLINE_DAYS.colon).length;
   const mean = n ? waits.reduce((a, b) => a + b, 0) / n : null;
   const median = n ? (n % 2 ? waits[(n - 1) / 2] : (waits[n / 2 - 1] + waits[n / 2]) / 2) : null;
   const pct = n ? Math.round((within / n) * 1000) / 10 : null;
-  return { n, within, pct, mean, median, excluded };
+  return { n, within, pct, mean, median, excluded, within28, mid28to90, over90 };
 }
 function summarizeCases(cases) {
   const total = cases.length;
@@ -16178,8 +16188,12 @@ async function testIdAgainstReferenceSheet() {
 // نفس منطق fetchColonReferenceSheetData بالضبط (المطابقة عمودًا بعمود)،
 // بس المصدر GitHub بدل تحميل مباشر من Drive — البديل الكامل بعد إيقاف
 // اتصال Drive نهائيًا.
-async function fetchColonReferenceSheetDataFromGitHub() {
-  const data = await fetchGitHubJson('data/reference/colon_hub.json');
+async function fetchColonReferenceSheetDataFromGitHub(refKey) {
+  refKey = refKey || 'colon_hub';
+  // الملف المرجعي الثاني (colon_hub2) متعدد المستشفيات وعناوينه مختلفة: عمود "result" فيه
+  // قد يطابق "Date of Lab result" بالخطأ، فنستخدم مطابقة صارمة لنتيجة الفحص هناك فقط.
+  const strictResult = refKey !== 'colon_hub';
+  const data = await fetchGitHubJson(`data/reference/${refKey}.json`);
   const byNum = new Map();
   Object.entries(data.sheets || {}).forEach(([sheetName, sheetInfo]) => {
     const converted = convertGitHubSheetToPending(sheetInfo);
@@ -16187,7 +16201,7 @@ async function fetchColonReferenceSheetDataFromGitHub() {
     const idIdx = findCol(labels, ['national id', 'id number', 'id', 'رقم الهوية', 'الهوية']);
     if (idIdx === -1) return; // ورقة ما تحتوي بيانات حالات — تُتجاهل
     const ageIdx = findCol(labels, ['age', 'العمر', 'عمر']);
-    const testResultIdx = findCol(labels, ['test result', 'result', 'نتيجة الفحص', 'النتيجة']);
+    const testResultIdx = strictResult ? findCol(labels, ['test result', 'نتيجة الفحص']) : findCol(labels, ['test result', 'result', 'نتيجة الفحص', 'النتيجة']);
     const examDateIdx = findCol(labels, [
       'date of receiving sample from patient', 'date of receiving sample', 'date of receving sample from patient', 'date of receving sample', 'receiving sample', 'receving sample',
       'تاريخ استلام العينة', 'تاريخ الفحص', 'تاريخ استلام العينه',
@@ -16265,7 +16279,14 @@ async function syncColonReferenceFromGitHub() {
     byId = await fetchColonReferenceSheetDataFromGitHub();
   } catch (e) {
     console.error('syncColonReferenceFromGitHub failed', e);
-    return;
+    byId = new Map(); // لا نوقف الملف المرجعي الثاني بسبب فشل الأول
+  }
+  // الملف المرجعي الثاني (Colon Cancer Cases_AA): اختياري — لو غير موجود بعد، يُتجاهل بصمت.
+  let byId2 = new Map();
+  try {
+    byId2 = await fetchColonReferenceSheetDataFromGitHub('colon_hub2');
+  } catch (e) {
+    if (!(e && e.noData)) console.error('colon_hub2 sync failed', e);
   }
   let changed = false;
   positiveLog.filter(e => e.module === 'colon' && e.hospital === REFERRAL_HUB_HOSPITAL).forEach(e => {
@@ -16288,6 +16309,22 @@ async function syncColonReferenceFromGitHub() {
     e.lastSyncedAt = new Date().toISOString();
     changed = true;
   });
+  // الملف الثاني: يُثري أي حالة قولون مطابقة بالهوية (أي مستشفى)، ويملأ الحقول الفاضية فقط
+  // بدون أن يكتب فوق أي قيمة موجودة (لا من الملف الأول ولا من ملف المستشفى نفسه).
+  if (byId2.size) {
+    positiveLog.filter(e => e.module === 'colon').forEach(e => {
+      const ref = byId2.get(e.num);
+      if (!ref) return;
+      Object.keys(ref).forEach(k => {
+        if (k === 'hospital' || k === 'regDate') return;
+        const v = ref[k];
+        if (v && !e[k]) e[k] = v;
+      });
+      if (e.hospital === REFERRAL_HUB_HOSPITAL) e.masterRefMatched = true;
+      e.lastSyncedAt = new Date().toISOString();
+      changed = true;
+    });
+  }
   lastColonRefSyncAt = new Date().toISOString();
   if (changed) { savePositiveLog(); try { renderPositiveLog(); } catch (err) {} }
 }
@@ -16831,6 +16868,9 @@ function showPositiveLogPeriodSummaryModal(explicitHospitalScope) {
         const row = (w, title) => hdr(title)
           + kpi(w.pct === null ? '—' : w.pct + '%', `${t('kpiColonCompliance').replace('{n}', BIOPSY_DEADLINE_DAYS.colon)} (${w.within}/${w.n})`, w.pct === null ? 'var(--muted)' : ringColorByPct(w.pct))
           + kpi(w.n, t('kpiColonCompleted'))
+          + kpi(w.within28, `${t('kpiColonWithin28')} (${w.n ? Math.round(w.within28 / w.n * 1000) / 10 : 0}%)`, 'var(--success)')
+          + kpi(w.mid28to90, `${t('kpiColonMid').replace('{n}', BIOPSY_DEADLINE_DAYS.colon)} (${w.n ? Math.round(w.mid28to90 / w.n * 1000) / 10 : 0}%)`, 'var(--warn)')
+          + kpi(w.over90, `${t('kpiColonOverDl').replace('{n}', BIOPSY_DEADLINE_DAYS.colon)} (${w.n ? Math.round(w.over90 / w.n * 1000) / 10 : 0}%)`, 'var(--danger)')
           + kpi(f1(w.mean), t('kpiColonAvgWait'), 'var(--warn)')
           + kpi(f1(w.median), t('kpiColonMedianWait'), 'var(--warn)');
         return row(w2, t('kpiFromSampleTag')) + row(w, t('kpiFromOscTag'));
